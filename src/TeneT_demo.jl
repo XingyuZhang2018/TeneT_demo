@@ -1,5 +1,8 @@
 module TeneT_demo
 
-# Write your package code here.
+include("./hamiltonian_models.jl")
+include("./construct_M.jl")
+include("./observable.jl")
+include("./optimise_ipeps.jl")
 
 end
