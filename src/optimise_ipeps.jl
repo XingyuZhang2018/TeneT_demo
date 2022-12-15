@@ -11,7 +11,7 @@ export init_ipeps, optimise_ipeps
 Initial `bcipeps` and give `key` for use of later optimization. The key include `model`, `D`, `χ`, `tol` and `maxiter`. 
 The iPEPS is random initial if there isn't any calculation before, otherwise will be load from file `/data/model_D_chi_tol_maxiter.jld2`
 """
-function init_ipeps(model::HamiltonianModel; folder::String="./data/", atype = Array, Ni::Int, Nj::Int, D::Int, χ::Int, tol::Real=1e-10, maxiter::Int=10, miniter::Int=1, verbose = true)
+function init_ipeps(model::HamiltonianModel; folder::String="./data/", atype = Array, Ni::Int, Nj::Int, D::Array, χ::Int, tol::Real=1e-10, maxiter::Int=10, miniter::Int=1, verbose = true)
     folder = joinpath(folder, "$(Ni)x$(Nj)/$(model)")
     mkpath(folder)
     chkp_file = joinpath(folder, "D$(D)_χ$(χ)_tol$(tol)_maxiter$(maxiter).jld2")
@@ -19,7 +19,7 @@ function init_ipeps(model::HamiltonianModel; folder::String="./data/", atype = A
         A = load(chkp_file)["bcipeps"]
         verbose && println("load BCiPEPS from $chkp_file")
     else
-        A = rand(ComplexF64,D,D,D,D,2,Ni,Nj)
+        A = rand(ComplexF64,(D...),2,Ni,Nj)
         verbose && println("random initial BCiPEPS $chkp_file")
     end
     A /= norm(A)
@@ -67,7 +67,7 @@ BCVUMPS with parameters `χ`, `tol` and `maxiter`.
 function energy(h, A, oc, key; verbose = true, savefile = true)
     folder, model, atype, Ni, Nj, D, χ, tol, maxiter, miniter, verbose = key
     ap = ein"abcdeij,fghmnij->afbgchdmenij"(A, conj(A))
-    ap = reshape(ap, D^2, D^2, D^2, D^2, 2, 2, Ni, Nj)
+    ap = reshape(ap, D[1]^2,D[2]^2,D[3]^2,D[4]^2, 2, 2, Ni, Nj)
     M = ein"abcdeeij->abcdij"(ap)
 
     env = obs_env(M; χ = χ, tol = tol, maxiter = maxiter, miniter = miniter, verbose = verbose, savefile = savefile, infolder = folder, outfolder = folder)
@@ -119,7 +119,7 @@ function optimise_ipeps(A::AbstractArray, key; f_tol = 1e-6, opiter = 100, optim
     folder, model, atype, Ni, Nj, D, χ, tol, maxiter, miniter, verbose = key
 
     h = hamiltonian(model)
-    oc = optcont(D, χ)
+    oc = optcont(D[1], χ)
     f(x) = real(energy(h, x, oc, key))
     g(x) = Zygote.gradient(f,x)[1]
     message = "time  steps   energy           grad_norm\n"
