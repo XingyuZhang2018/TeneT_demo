@@ -7,6 +7,26 @@ using Optim
 export init_ipeps, optimise_ipeps
 
 """
+    indexperm_symmetrize(ipeps)
+return a `SquareIPEPS` based on `ipeps` that is symmetric under
+permutation of its virtual indices.
+```
+        4
+        │
+ 1 ── ipeps ── 3
+        │
+        2
+```
+"""
+function indexperm_symmetrize(ipeps)
+    ipeps += permutedims(ipeps, (1,4,3,2,5,6,7)) # up-down
+    ipeps += permutedims(ipeps, (3,2,1,4,5,6,7)) # left-right
+    # ipeps += permutedims(ipeps, (2,1,4,3,5,6,7)) # diagonal
+    # ipeps += permutedims(ipeps, (4,3,2,1,5,6,7)) # rotation
+    return ipeps / norm(ipeps)
+end
+
+"""
     init_ipeps(model::HamiltonianModel; D::Int, χ::Int, tol::Real, maxiter::Int)
 Initial `bcipeps` and give `key` for use of later optimization. The key include `model`, `D`, `χ`, `tol` and `maxiter`. 
 The iPEPS is random initial if there isn't any calculation before, otherwise will be load from file `/data/model_D_chi_tol_maxiter.jld2`
@@ -22,7 +42,7 @@ function init_ipeps(model::HamiltonianModel; folder::String="./data/", atype = A
         A = rand(ComplexF64,(D...),2,Ni,Nj)
         verbose && println("random initial BCiPEPS $chkp_file")
     end
-    A /= norm(A)
+    A = indexperm_symmetrize(A)
     key = (folder, model, atype, Ni, Nj, D, χ, tol, maxiter, miniter, verbose)
     return A, key
 end
@@ -66,11 +86,12 @@ BCVUMPS with parameters `χ`, `tol` and `maxiter`.
 """
 function energy(h, A, oc, key; verbose = true, savefile = true)
     folder, model, atype, Ni, Nj, D, χ, tol, maxiter, miniter, verbose = key
+    A = indexperm_symmetrize(A)
     ap = ein"abcdeij,fghmnij->afbgchdmenij"(A, conj(A))
     ap = reshape(ap, D[1]^2,D[2]^2,D[3]^2,D[4]^2, 2, 2, Ni, Nj)
     M = ein"abcdeeij->abcdij"(ap)
 
-    env = obs_env(M; χ = χ, tol = tol, maxiter = maxiter, miniter = miniter, verbose = verbose, savefile = savefile, infolder = folder, outfolder = folder)
+    env = obs_env(M; updown = false, χ = χ, tol = tol, maxiter = maxiter, miniter = miniter, verbose = verbose, savefile = savefile, infolder = joinpath(folder,"$D"), outfolder = joinpath(folder,"$D"))
     e = expectation_value(h, ap, env, oc, key)
     return e
 end
@@ -118,10 +139,10 @@ The energy is calculated using vumps with key include parameters `χ`, `tol` and
 function optimise_ipeps(A::AbstractArray, key; f_tol = 1e-6, opiter = 100, optimmethod = LBFGS(m = 20))
     folder, model, atype, Ni, Nj, D, χ, tol, maxiter, miniter, verbose = key
 
-    h = hamiltonian(model)
+    h  = atype(hamiltonian(model))
     oc = optcont(D[1], χ)
-    f(x) = real(energy(h, x, oc, key))
-    g(x) = Zygote.gradient(f,x)[1]
+    f(x) = real(energy(h, atype(x), oc, key))
+    g(x) = Zygote.gradient(f,atype(x))[1]
     message = "time  steps   energy           grad_norm\n"
     printstyled(message; bold=true, color=:red)
     flush(stdout)
