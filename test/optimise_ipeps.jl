@@ -21,10 +21,10 @@ using CUDA
 #     @show energy(h, A, oc, key; verbose = true, savefile = true)
 # end
 
-@testset "optimise_ipeps" for Ni = [1], Nj = [1], χ in [50]
-    D = [2,3,2,3]
+@testset "optimise_ipeps" for Ni = [1], Nj = [1], χ in [20]
+    D = [2,2,2,2]
     model = Heisenberg(Ni,Nj,-1.0,-1.0,1.0)
-    A, key = init_ipeps(model; atype = CuArray, Ni=Ni, Nj=Nj, D=D, χ=χ, verbose= true)
+    A, key = init_ipeps(model; atype = Array, Ni=Ni, Nj=Nj, D=D, χ=χ, verbose= false)
     optimise_ipeps(A, key; f_tol = 1e-10, opiter = 1000, optimmethod = LBFGS(m = 20))
 end
 

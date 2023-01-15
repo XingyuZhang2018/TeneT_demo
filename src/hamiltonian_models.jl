@@ -1,8 +1,10 @@
+using LinearAlgebra: I
 using TeneT: _arraytype
 using OMEinsum
 using Zygote
 
-export Ising, Heisenberg
+
+export Ising, Heisenberg, TFIsing
 export hamiltonian
 
 const isingβc = log(1+sqrt(2))/2
@@ -46,4 +48,21 @@ function hamiltonian(model::Heisenberg)
     model.Jx * ein"ij,kl -> ijkl"(Sx, Sx) +
     model.Jy * ein"ij,kl -> ijkl"(Sy, Sy) +
     model.Jz * ein"ij,kl -> ijkl"(Sz, Sz)
+end
+
+struct TFIsing{T<:Real} <: HamiltonianModel
+    Ni::Int
+    Nj::Int
+    λ::T
+end
+
+"""
+    hamiltonian(model::TFIsing)
+
+return the TFIsing hamiltonian for the `model` as a two-site operator.
+"""
+function hamiltonian(model::TFIsing)
+    -ein"ij,kl -> ijkl"(Sz*2, Sz*2) - 
+    model.λ/4 * ein"ij,kl -> ijkl"(Sx*2, I(2)) - 
+    model.λ/4 * ein"ij,kl -> ijkl"(I(2), Sx*2)
 end

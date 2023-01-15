@@ -96,6 +96,18 @@ function energy(h, A, oc, key; verbose = true, savefile = true)
     return e
 end
 
+function spin(A, key; verbose = true, savefile = true)
+    folder, model, atype, Ni, Nj, D, χ, tol, maxiter, miniter, verbose = key
+    A = indexperm_symmetrize(A)
+    ap = ein"abcdeij,fghmnij->afbgchdmenij"(A, conj(A))
+    ap = reshape(ap, D[1]^2,D[2]^2,D[3]^2,D[4]^2, 2, 2, Ni, Nj)
+    M = ein"abcdeeij->abcdij"(ap)
+
+    env = obs_env(M; updown = false, χ = χ, tol = tol, maxiter = maxiter, miniter = miniter, verbose = verbose, savefile = savefile, infolder = joinpath(folder,"$D"), outfolder = joinpath(folder,"$D"))
+    e = spin_value(ap, env, key)
+    return e
+end
+
 function expectation_value(h, ap, env, oc, key)
     _, ALu, Cu, ARu, ALd, Cd, ARd, FL, FR, FLu, FRu = env
     folder, model, atype, Ni, Nj, D, χ, tol, maxiter, miniter, verbose = key
@@ -121,10 +133,44 @@ function expectation_value(h, ap, env, oc, key)
         n = Array(ein"pprr -> "(lr))[]
         verbose && println("Vertical energy = $(e/n)")
         etol += e/n
+
+        Zygote.@ignore begin
+            lr = Array(ein"(((aeg,abc),ehfbpq),ghi),cfi -> pq"(FL[:,:,:,i,j],ACu[:,:,:,i,j],ap[:,:,:,:,:,:,i,j],ACd[:,:,:,ir,j],FR[:,:,:,i,j]))
+            Mx = Array(ein"pq, pq -> "(lr,Sx*2))[]
+            My = Array(ein"pq, pq -> "(lr,Sy*2))[]
+            Mz = Array(ein"pq, pq -> "(lr,Sz*2))[]
+            n =  Array(ein"pp -> "(lr))[]
+            M = [Mx,My,Mz] / n
+            println("M = $(M))")
+            println("|M| = $(norm(M)))")
+        end
     end
 
     verbose && println("e = $(etol/Ni/Nj)")
     return etol/Ni/Nj
+end
+
+function spin_value(ap, env, key)
+    _, ALu, Cu, ARu, ALd, Cd, ARd, FL, FR, FLu, FRu = env
+    folder, model, atype, Ni, Nj, D, χ, tol, maxiter, miniter, verbose = key
+    ACu = ALCtoAC(ALu, Cu)
+    ACd = ALCtoAC(ALd, Cd)
+
+    for j = 1:Nj, i = 1:Ni
+        verbose && println("===========$i,$j===========")
+        ir = Ni + 1 - i
+        jr = j + 1 - (j==Nj) * Nj
+        lr = ein"(((aeg,abc),ehfbpq),ghi),cfi -> pq"(FL[:,:,:,i,j],ACu[:,:,:,i,j],ap[:,:,:,:,:,:,i,j],ACd[:,:,:,ir,j],FR[:,:,:,i,j])
+        Mx = Array(ein"pq, pq -> "(lr,Sx))[]
+        My = Array(ein"pq, pq -> "(lr,Sy))[]
+        Mz = Array(ein"pq, pq -> "(lr,Sz))[]
+        n =  Array(ein"pp -> "(lr))[]
+        M = [Mx,My,Mz] / n
+        println("M = $(M))")
+        println("|M| = $(norm(M)))")
+    end
+
+    # verbose && println("e = $(etol/Ni/Nj)")
 end
 
 """
