@@ -134,16 +134,16 @@ function expectation_value(h, ap, env, oc, key)
         verbose && println("Vertical energy = $(e/n)")
         etol += e/n
 
-        Zygote.@ignore begin
-            lr = Array(ein"(((aeg,abc),ehfbpq),ghi),cfi -> pq"(FL[:,:,:,i,j],ACu[:,:,:,i,j],ap[:,:,:,:,:,:,i,j],ACd[:,:,:,ir,j],FR[:,:,:,i,j]))
-            Mx = Array(ein"pq, pq -> "(lr,Sx*2))[]
-            My = Array(ein"pq, pq -> "(lr,Sy*2))[]
-            Mz = Array(ein"pq, pq -> "(lr,Sz*2))[]
-            n =  Array(ein"pp -> "(lr))[]
-            M = [Mx,My,Mz] / n
-            println("M = $(M))")
-            println("|M| = $(norm(M)))")
-        end
+        # Zygote.@ignore begin
+        #     lr = Array(ein"(((aeg,abc),ehfbpq),ghi),cfi -> pq"(FL[:,:,:,i,j],ACu[:,:,:,i,j],ap[:,:,:,:,:,:,i,j],ACd[:,:,:,ir,j],FR[:,:,:,i,j]))
+        #     Mx = Array(ein"pq, pq -> "(lr,Sx*2))[]
+        #     My = Array(ein"pq, pq -> "(lr,Sy*2))[]
+        #     Mz = Array(ein"pq, pq -> "(lr,Sz*2))[]
+        #     n =  Array(ein"pp -> "(lr))[]
+        #     M = [Mx,My,Mz] / n
+        #     println("M = $(M))")
+        #     println("|M| = $(norm(M)))")
+        # end
     end
 
     verbose && println("e = $(etol/Ni/Nj)")
@@ -161,9 +161,9 @@ function spin_value(ap, env, key)
         ir = Ni + 1 - i
         jr = j + 1 - (j==Nj) * Nj
         lr = ein"(((aeg,abc),ehfbpq),ghi),cfi -> pq"(FL[:,:,:,i,j],ACu[:,:,:,i,j],ap[:,:,:,:,:,:,i,j],ACd[:,:,:,ir,j],FR[:,:,:,i,j])
-        Mx = Array(ein"pq, pq -> "(lr,Sx))[]
-        My = Array(ein"pq, pq -> "(lr,Sy))[]
-        Mz = Array(ein"pq, pq -> "(lr,Sz))[]
+        Mx = Array(ein"pq, pq -> "(lr,Sx*2))[]
+        My = Array(ein"pq, pq -> "(lr,Sy*2))[]
+        Mz = Array(ein"pq, pq -> "(lr,Sz*2))[]
         n =  Array(ein"pp -> "(lr))[]
         M = [Mx,My,Mz] / n
         println("M = $(M))")
@@ -182,13 +182,23 @@ two-site hamiltonian `h`. The minimization is done using `Optim` with default-me
 providing `optimmethod`. Other options to optim can be passed with `optimargs`.
 The energy is calculated using vumps with key include parameters `χ`, `tol` and `maxiter`.
 """
-function optimise_ipeps(A::AbstractArray, key; f_tol = 1e-6, opiter = 100, optimmethod = LBFGS(m = 20))
-    folder, model, atype, Ni, Nj, D, χ, tol, maxiter, miniter, verbose = key
+function optimise_ipeps(A::AbstractArray, key; 
+    maxiter_ad=10, miniter_ad=3, f_tol = 1e-6, opiter = 100, 
+    optimmethod = LBFGS(m = 20))
 
+    folder, model, atype, Ni, Nj, D, χ, tol, maxiter, miniter, verbose = key
+    keyback = folder, model, atype, Ni, Nj, D, χ, tol, maxiter_ad, miniter_ad, verbose
     h  = atype(hamiltonian(model))
     oc = optcont(D[1], χ)
     f(x) = real(energy(h, atype(x), oc, key))
-    g(x) = Zygote.gradient(f,atype(x))[1]
+    ff(x) = real(energy(h, atype(x), oc, keyback))
+    function g(x)
+        println("for backward convergence:")
+        f(x)
+        println("true backward:")
+        grad = Zygote.gradient(ff,atype(x))[1]
+        return grad
+    end
     message = "time  steps   energy           grad_norm\n"
     printstyled(message; bold=true, color=:red)
     flush(stdout)
