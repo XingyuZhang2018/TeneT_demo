@@ -11,19 +11,25 @@ export init_ipeps, optimise_ipeps
 Initial `bcipeps` and give `key` for use of later optimization. The key include `model`, `D`, `χ`, `tol` and `maxiter`. 
 The iPEPS is random initial if there isn't any calculation before, otherwise will be load from file `/data/model_D_chi_tol_maxiter.jld2`
 """
-function init_ipeps(model::HamiltonianModel; folder::String="./data/", atype = Array, Ni::Int, Nj::Int, D::Int, χ::Int, tol::Real=1e-10, maxiter::Int=10, miniter::Int=1, verbose = true)
-    folder = joinpath(folder, "$(Ni)x$(Nj)/$(model)")
+function init_ipeps(model::HamiltonianModel; 
+                    folder::String="./data/", 
+                    atype = Array, 
+                    Ni::Int, Nj::Int, D1::Int, D2::Int, χ::Int, 
+                    tol::Real=1e-10, maxiter::Int=10, miniter::Int=1, 
+                    verbose = true)
+    folder = joinpath(folder, "$(model)")
     mkpath(folder)
-    chkp_file = joinpath(folder, "D$(D)_χ$(χ)_tol$(tol)_maxiter$(maxiter).jld2")
+    chkp_file = joinpath(folder, "D1-$(D1)_D2-$(D2)_χ$(χ)_tol$(tol)_maxiter$(maxiter).jld2")
     if isfile(chkp_file)
         A = load(chkp_file)["bcipeps"]
         verbose && println("load BCiPEPS from $chkp_file")
     else
-        A = rand(ComplexF64,D,D,D,D,2,Ni,Nj)
+        # A = rand(ComplexF64,D,D,D,D,2,Ni,Nj)
+        A = rand(ComplexF64,2*D1^4+4*D1*D2,Ni,Nj)
         verbose && println("random initial BCiPEPS $chkp_file")
     end
     A /= norm(A)
-    key = (folder, model, atype, Ni, Nj, D, χ, tol, maxiter, miniter, verbose)
+    key = (folder, model, atype, Ni, Nj, D1, D2, χ, tol, maxiter, miniter, verbose)
     return A, key
 end
 
@@ -59,15 +65,31 @@ function optcont(D::Int, χ::Int)
     oc_H, oc_V
 end
 
+function build_ipeps(A, D1, D2)
+    Ni, Nj = size(A)[2:3]
+    ipeps = Zygote.Buffer(A, D2,D2,D2,D2,2,Ni,Nj)
+    for j in 1:Nj, i in 1:Ni
+        ipeps[:,:,:,:,:,i,j] = ein"abcdi,ea,fb,gc,hd->efghi"(
+            reshape(A[1:2*D1^4,i,j], D1,D1,D1,D1,2), 
+            reshape(A[2*D1^4+1:2*D1^4+D1*D2,i,j], D2,D1),
+            reshape(A[2*D1^4+D1*D2+1:2*D1^4+2*D1*D2,i,j],D2,D1),
+            reshape(A[2*D1^4+2*D1*D2+1:2*D1^4+3*D1*D2,i,j],D2,D1),
+            reshape(A[2*D1^4+3*D1*D2+1:2*D1^4+4*D1*D2,i,j],D2,D1),
+            )
+    end
+    return copy(ipeps)
+end
+
 """
     energy(h, bcipeps; χ, tol, maxiter)
 return the energy of the `bcipeps` 2-site hamiltonian `h` and calculated via a
 BCVUMPS with parameters `χ`, `tol` and `maxiter`.
 """
 function energy(h, A, oc, key; verbose = true, savefile = true)
-    folder, model, atype, Ni, Nj, D, χ, tol, maxiter, miniter, verbose = key
+    folder, model, atype, Ni, Nj, D1, D2, χ, tol, maxiter, miniter, verbose = key
+    A = build_ipeps(A, D1, D2)
     ap = ein"abcdeij,fghmnij->afbgchdmenij"(A, conj(A))
-    ap = reshape(ap, D^2, D^2, D^2, D^2, 2, 2, Ni, Nj)
+    ap = reshape(ap, D2^2, D2^2, D2^2, D2^2, 2, 2, Ni, Nj)
     M = ein"abcdeeij->abcdij"(ap)
 
     env = obs_env(M; χ = χ, tol = tol, maxiter = maxiter, miniter = miniter, verbose = verbose, savefile = savefile, infolder = folder, outfolder = folder)
@@ -77,7 +99,7 @@ end
 
 function expectation_value(h, ap, env, oc, key)
     _, ALu, Cu, ARu, ALd, Cd, ARd, FL, FR, FLu, FRu = env
-    folder, model, atype, Ni, Nj, D, χ, tol, maxiter, miniter, verbose = key
+    folder, model, atype, Ni, Nj, D1, D2, χ, tol, maxiter, miniter, verbose = key
     oc_H, oc_V = oc
     ACu = ALCtoAC(ALu, Cu)
     ACd = ALCtoAC(ALd, Cd)
@@ -115,13 +137,23 @@ two-site hamiltonian `h`. The minimization is done using `Optim` with default-me
 providing `optimmethod`. Other options to optim can be passed with `optimargs`.
 The energy is calculated using vumps with key include parameters `χ`, `tol` and `maxiter`.
 """
-function optimise_ipeps(A::AbstractArray, key; f_tol = 1e-6, opiter = 100, optimmethod = LBFGS(m = 20))
-    folder, model, atype, Ni, Nj, D, χ, tol, maxiter, miniter, verbose = key
-
+function optimise_ipeps(A::AbstractArray, key; 
+                        maxiter_ad=10, miniter_ad=1,
+                        f_tol = 1e-6, opiter = 100, 
+                        optimmethod = LBFGS(m = 20))
+    folder, model, atype, Ni, Nj, D1, D2, χ, tol, maxiter, miniter, verbose = key
+    keyback = folder, model, atype, Ni, Nj, D1, D2, χ, tol, maxiter_ad, miniter_ad, verbose
     h = hamiltonian(model)
-    oc = optcont(D, χ)
+    oc = optcont(D2, χ)
     f(x) = real(energy(h, x, oc, key))
-    g(x) = Zygote.gradient(f,x)[1]
+    ff(x) = real(energy(h, x, oc, keyback))
+    function g(x)
+        println("for backward convergence:")
+        f(x)
+        println("true backward:")
+        grad = Zygote.gradient(ff,atype(x))[1]
+        return grad
+    end
     message = "time  steps   energy           grad_norm\n"
     printstyled(message; bold=true, color=:red)
     flush(stdout)
@@ -145,13 +177,13 @@ function writelog(os::OptimizationState, key=nothing)
     printstyled(message; bold=true, color=:red)
     flush(stdout)
 
-    folder, model, atype, Ni, Nj, D, χ, tol, maxiter, miniter, verbose = key
+    folder, model, atype, Ni, Nj, D1, D2, χ, tol, maxiter, miniter, verbose = key
     !(isdir(folder)) && mkdir(folder)
     if !(key === nothing)
-        logfile = open(joinpath(folder, "D$(D)_χ$(χ)_tol$(tol)_maxiter$(maxiter).log"), "a")
+        logfile = open(joinpath(folder, "D1-$(D1)_D2-$(D2)_χ$(χ)_tol$(tol)_maxiter$(maxiter).log"), "a")
         write(logfile, message)
         close(logfile)
-        save(joinpath(folder, "D$(D)_χ$(χ)_tol$(tol)_maxiter$(maxiter).jld2"), "bcipeps", os.metadata["x"])
+        save(joinpath(folder, "D1-$(D1)_D2-$(D2)_χ$(χ)_tol$(tol)_maxiter$(maxiter).jld2"), "bcipeps", os.metadata["x"])
     end
     return false
 end
