@@ -33,13 +33,24 @@ using OMEinsumContractionOrders
     oc_H, oc_V = optcont(D::Int, χ::Int)
 optimise the follow two einsum contractions for the given `D` and `χ` which are used to calculate the energy of the 2-site hamiltonian:
 ```
-                                            a ────┬──── c          
+                                            a ────┬──── c 
 a ────┬──c ──┬──── f                        │     b     │  
 │     b      e     │                        ├─ e ─┼─ f ─┤  
 ├─ g ─┼─  h ─┼─ i ─┤                        g     h     i 
 │     k      n     │                        ├─ j ─┼─ k ─┤ 
 j ────┴──l ──┴──── o                        │     m     │ 
                                             l ────┴──── n 
+                                          
+a ────┬──c     c──┬──── a                                 
+│     b           b     │                                 
+├─ d ─┼─ e     e ─┼─ d ─┤                                   
+f     g           h     i 
+
+f     g           h     i 
+├─ d ─┼─ j     j ─┼─ d ─┤
+│     b           b     │
+a ────┴──k     k──┴──── a
+                                          
 ```
 where the central two block are six order tensor have extra bond `pq` and `rs`
 """
@@ -56,7 +67,11 @@ function optcont(D::Int, χ::Int)
     # oc_V = optimize_code(ein"abc,aeg,ehfbpq,cfi,gjl,jmkhrs,ikn,lmn -> pqrs", sd, TreeSA())
     oc_V = ein"(((abc,aeg),ehfbpq),cfi),(gjl,(jmkhrs,(ikn,lmn))) -> pqrs"
     print("Vertical Contraction Complexity(seed=$(seed))",OMEinsum.timespace_complexity(oc_V,sd),"\n") 
-    oc_H, oc_V
+
+    oc_corner = ein"(adf,abc),dgebpq->cefgpq", ein"(cba,adi),ehdbpq->cehipq",
+                ein"(fda,abk),dbjgpq->fgjkpq", ein"(ida,kba),jbdhpq->hijkpq"
+    oc_HV = ein"((cefgpq,cehist),fgjkuv),hijkwx->pqstuvwx"
+    oc_H, oc_V, oc_corner, oc_HV
 end
 
 """
@@ -67,7 +82,7 @@ BCVUMPS with parameters `χ`, `tol` and `maxiter`.
 function energy(h, A, oc, key; verbose = true, savefile = true)
     folder, model, atype, Ni, Nj, D, χ, tol, maxiter, miniter, verbose = key
     ap = ein"abcdeij,fghmnij->afbgchdmenij"(A, conj(A))
-    ap = reshape(ap, D^2, D^2, D^2, D^2, 2, 2, Ni, Nj)
+    ap = atype(reshape(ap, D^2, D^2, D^2, D^2, 2, 2, Ni, Nj))
     M = ein"abcdeeij->abcdij"(ap)
 
     env = obs_env(M; χ = χ, tol = tol, maxiter = maxiter, miniter = miniter, verbose = verbose, savefile = savefile, infolder = folder, outfolder = folder)
@@ -78,7 +93,7 @@ end
 function expectation_value(h, ap, env, oc, key)
     _, ALu, Cu, ARu, ALd, Cd, ARd, FL, FR, FLu, FRu = env
     folder, model, atype, Ni, Nj, D, χ, tol, maxiter, miniter, verbose = key
-    oc_H, oc_V = oc
+    oc_H, oc_V, oc_corner, oc_HV = oc
     ACu = ALCtoAC(ALu, Cu)
     ACd = ALCtoAC(ALd, Cd)
 
@@ -86,20 +101,37 @@ function expectation_value(h, ap, env, oc, key)
     for j = 1:Nj, i = 1:Ni
         verbose && println("===========$i,$j===========")
         ir = Ni + 1 - i
-        jr = j + 1 - (j==Nj) * Nj
+        jr = mod1(j + 1, Nj)
         lr = oc_H(FL[:,:,:,i,j],ACu[:,:,:,i,j],ap[:,:,:,:,:,:,i,j],ACd[:,:,:,ir,j],FR[:,:,:,i,jr],ARu[:,:,:,i,jr],ap[:,:,:,:,:,:,i,jr],ARd[:,:,:,ir,jr])
-        e = Array(ein"pqrs, pqrs -> "(lr,h))[]
+        e = Array(ein"pqrs, pqrs -> "(lr,atype(h[1])))[]
+        @show e
         n =  Array(ein"pprr -> "(lr))[]
         verbose && println("Horizontal energy = $(e/n)")
         etol += e/n
 
-        ir  =  i + 1 - (i==Ni) * Ni
-        irr = Ni - i + (i==Ni) * Ni
+        ir  =  mod1(i + 1, Ni)
+        irr = mod1(Ni - i, Ni)
         lr = oc_V(ACu[:,:,:,i,j],FLu[:,:,:,i,j],ap[:,:,:,:,:,:,i,j],FRu[:,:,:,i,j],FL[:,:,:,ir,j],ap[:,:,:,:,:,:,ir,j],FR[:,:,:,ir,j],ACd[:,:,:,irr,j])
-        e = Array(ein"pqrs, pqrs -> "(lr,h))[]
+        e = Array(ein"pqrs, pqrs -> "(lr,atype(h[1])))[]
         n = Array(ein"pprr -> "(lr))[]
         verbose && println("Vertical energy = $(e/n)")
         etol += e/n
+
+        jr  = mod1(j + 1, Nj)
+        ir  = mod1(i + 1, Ni)
+        irr = mod1(Ni - i, Ni)
+        lt = oc_corner[1](FLu[:,:,:,i,j], ACu[:,:,:,i,j], ap[:,:,:,:,:,:,i,j])
+        rt = oc_corner[2](ARu[:,:,:,i,jr], FRu[:,:,:,i,jr], ap[:,:,:,:,:,:,i,jr])
+        lb = oc_corner[3](FL[:,:,:,ir,j], ACd[:,:,:,irr,j], ap[:,:,:,:,:,:,ir,j])
+        rb = oc_corner[4](FR[:,:,:,ir,jr], ARd[:,:,:,irr,jr], ap[:,:,:,:,:,:,ir,jr])
+        
+        lrtb = oc_HV(lt, rt, lb, rb)
+        n = Array(ein"ppssuuww -> "(lrtb))[]
+        e1 = Array(ein"pqssuuwx, pqwx -> "(lrtb,atype(h[2])))[]
+        e2 = Array(ein"ppstuvww, stuv -> "(lrtb,atype(h[2])))[]
+        verbose && println("J2_1 energy = $(e1/n)")
+        verbose && println("J2_2 energy = $(e2/n)")
+        etol += (e1 + e2)/n
     end
 
     verbose && println("e = $(etol/Ni/Nj)")
