@@ -12,7 +12,7 @@ Initial `bcipeps` and give `key` for use of later optimization. The key include 
 The iPEPS is random initial if there isn't any calculation before, otherwise will be load from file `/data/model_D_chi_tol_maxiter.jld2`
 """
 function init_ipeps(model::HamiltonianModel; folder::String="./data/", atype = Array, Ni::Int, Nj::Int, D::Int, χ::Int, tol::Real=1e-10, maxiter::Int=10, miniter::Int=1, verbose = true)
-    folder = joinpath(folder, "$(Ni)x$(Nj)/$(model)")
+    folder = joinpath(folder, "$(Ni)x$(Nj)/$(model)/")
     mkpath(folder)
     chkp_file = joinpath(folder, "D$(D)_χ$(χ)_tol$(tol)_maxiter$(maxiter).jld2")
     if isfile(chkp_file)
@@ -100,23 +100,6 @@ function expectation_value(h, ap, env, oc, key)
     etol = 0
     for j = 1:Nj, i = 1:Ni
         verbose && println("===========$i,$j===========")
-        ir = Ni + 1 - i
-        jr = mod1(j + 1, Nj)
-        lr = oc_H(FL[:,:,:,i,j],ACu[:,:,:,i,j],ap[:,:,:,:,:,:,i,j],ACd[:,:,:,ir,j],FR[:,:,:,i,jr],ARu[:,:,:,i,jr],ap[:,:,:,:,:,:,i,jr],ARd[:,:,:,ir,jr])
-        e = Array(ein"pqrs, pqrs -> "(lr,atype(h[1])))[]
-        @show e
-        n =  Array(ein"pprr -> "(lr))[]
-        verbose && println("Horizontal energy = $(e/n)")
-        etol += e/n
-
-        ir  =  mod1(i + 1, Ni)
-        irr = mod1(Ni - i, Ni)
-        lr = oc_V(ACu[:,:,:,i,j],FLu[:,:,:,i,j],ap[:,:,:,:,:,:,i,j],FRu[:,:,:,i,j],FL[:,:,:,ir,j],ap[:,:,:,:,:,:,ir,j],FR[:,:,:,ir,j],ACd[:,:,:,irr,j])
-        e = Array(ein"pqrs, pqrs -> "(lr,atype(h[1])))[]
-        n = Array(ein"pprr -> "(lr))[]
-        verbose && println("Vertical energy = $(e/n)")
-        etol += e/n
-
         jr  = mod1(j + 1, Nj)
         ir  = mod1(i + 1, Ni)
         irr = mod1(Ni - i, Ni)
@@ -127,11 +110,16 @@ function expectation_value(h, ap, env, oc, key)
         
         lrtb = oc_HV(lt, rt, lb, rb)
         n = Array(ein"ppssuuww -> "(lrtb))[]
-        e1 = Array(ein"pqssuuwx, pqwx -> "(lrtb,atype(h[2])))[]
-        e2 = Array(ein"ppstuvww, stuv -> "(lrtb,atype(h[2])))[]
-        verbose && println("J2_1 energy = $(e1/n)")
-        verbose && println("J2_2 energy = $(e2/n)")
-        etol += (e1 + e2)/n
+        e12 = Array(ein"pqstuuww, pqst -> "(lrtb,atype(h[1])))[]
+        e13 = Array(ein"pqssuvww, pquv -> "(lrtb,atype(h[1])))[]
+        e14 = Array(ein"pqssuuwx, pqwx -> "(lrtb,atype(h[2])))[]
+        e23 = Array(ein"ppstuvww, stuv -> "(lrtb,atype(h[2])))[]
+
+        verbose && println("energy12 = $(e12/n)")
+        verbose && println("energy13 = $(e13/n)")
+        verbose && println("energy14 = $(e14/n)")
+        verbose && println("energy23 = $(e23/n)")
+        etol += (e12 + e13 + e14 + e23)/n
     end
 
     verbose && println("e = $(etol/Ni/Nj)")
@@ -147,13 +135,23 @@ two-site hamiltonian `h`. The minimization is done using `Optim` with default-me
 providing `optimmethod`. Other options to optim can be passed with `optimargs`.
 The energy is calculated using vumps with key include parameters `χ`, `tol` and `maxiter`.
 """
-function optimise_ipeps(A::AbstractArray, key; f_tol = 1e-6, opiter = 100, optimmethod = LBFGS(m = 20))
-    folder, model, atype, Ni, Nj, D, χ, tol, maxiter, miniter, verbose = key
+function optimise_ipeps(A::AbstractArray, key; 
+    maxiter_ad=10, miniter_ad=3, f_tol = 1e-6, opiter = 100, 
+    optimmethod = LBFGS(m = 20))
 
-    h = hamiltonian(model)
+    folder, model, atype, Ni, Nj, D, χ, tol, maxiter, miniter, verbose = key
+    keyback = folder, model, atype, Ni, Nj, D, χ, tol, maxiter_ad, miniter_ad, verbose
+    h  = hamiltonian(model)
     oc = optcont(D, χ)
-    f(x) = real(energy(h, x, oc, key))
-    g(x) = Zygote.gradient(f,x)[1]
+    f(x) = real(energy(h, atype(x), oc, key))
+    ff(x) = real(energy(h, atype(x), oc, keyback))
+    function g(x)
+        println("for backward convergence:")
+        f(x)
+        println("true backward:")
+        grad = Zygote.gradient(ff,atype(x))[1]
+        return grad
+    end
     message = "time  steps   energy           grad_norm\n"
     printstyled(message; bold=true, color=:red)
     flush(stdout)
