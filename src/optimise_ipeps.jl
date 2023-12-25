@@ -67,17 +67,16 @@ BCVUMPS with parameters `χ`, `tol` and `maxiter`.
 """
 function energy(h, A, oc, key; verbose = true, savefile = true)
     folder, model, atype, Ni, Nj, d, D, χ, tol, maxiter, miniter, verbose = key
-    ap = ein"abcdeij,fghmnij->afbgchdmenij"(A, conj(A))
-    ap = reshape(ap, D^2, D^2, D^2, D^2, d, d, Ni, Nj)
-    M = ein"abcdeeij->abcdij"(ap)
+    ap = reshape(ein"abcdeij,fghmnij->afbgchdmenij"(A, conj(A)), D^2, D^2, D^2, D^2, d, d, Ni, Nj)
+    M = reshape([ein"abcdee->abcd"(ap[:,:,:,:,:,:,mod1(i,Ni),ceil(Int,i/Nj)]) for i = 1:Ni*Nj], Ni,Nj)
 
-    env = obs_env(M; χ = χ, tol = tol, maxiter = maxiter, miniter = miniter, verbose = verbose, savefile = savefile, infolder = folder, outfolder = folder)
+    env = obs_env(M, VUMPS(χ = χ, tol = tol, maxiter = maxiter, miniter = miniter, verbose = verbose, savefile = savefile, infolder = folder, outfolder = folder, U1info=nothing))
     e = expectation_value(h, ap, env, oc, key)
     return e
 end
 
 function expectation_value(h, ap, env, oc, key)
-    _, ALu, Cu, ARu, ALd, Cd, ARd, FL, FR, FLu, FRu = env
+    ALu, Cu, ARu, ALd, Cd, ARd, FL, FR, FLu, FRu = env.ALu, env.Cu, env.ARu, env.ALd, env.Cd, env.ARd, env.FLo, env.FRo, env.FLu, env.FRu
     folder, model, atype, Ni, Nj, d, D, χ, tol, maxiter, miniter, verbose = key
     oc_H, oc_V, oc_on_site = oc
     ACu = ALCtoAC(ALu, Cu)
@@ -88,13 +87,13 @@ function expectation_value(h, ap, env, oc, key)
         verbose && println("===========$i,$j===========")
         ir = Ni + 1 - i
         jr = j + 1 - (j==Nj) * Nj
-        lr = oc_H(FL[:,:,:,i,j],ACu[:,:,:,i,j],ap[:,:,:,:,:,:,i,j],ACd[:,:,:,ir,j],FR[:,:,:,i,jr],ARu[:,:,:,i,jr],ap[:,:,:,:,:,:,i,jr],ARd[:,:,:,ir,jr])
+        lr = oc_H(FL[i,j],ACu[i,j],ap[:,:,:,:,:,:,i,j],conj(ACd[ir,j]),FR[i,jr],ARu[i,jr],ap[:,:,:,:,:,:,i,jr],conj(ARd[ir,jr]))
         e = Array(ein"pqrs, pqrs -> "(lr,h[1]))[]
         n =  Array(ein"pprr -> "(lr))[]
         verbose && println("Horizontal energy = $(e/n)")
         etol += e/n
 
-        lr = oc_on_site(FL[:,:,:,i,j],ACu[:,:,:,i,j],ap[:,:,:,:,:,:,i,j],ACd[:,:,:,ir,j],FR[:,:,:,i,j])
+        lr = oc_on_site(FL[i,j],ACu[i,j],ap[:,:,:,:,:,:,i,j],conj(ACd[ir,j]),FR[i,j])
         e = Array(ein"pq, pq -> "(lr,h[2]))[]
         n = Array(ein"pp -> "(lr))[]
         verbose && println("On site energy = $(e/n)")
@@ -102,7 +101,7 @@ function expectation_value(h, ap, env, oc, key)
 
         ir  =  i + 1 - (i==Ni) * Ni
         irr = Ni - i + (i==Ni) * Ni
-        lr = oc_V(ACu[:,:,:,i,j],FLu[:,:,:,i,j],ap[:,:,:,:,:,:,i,j],FRu[:,:,:,i,j],FL[:,:,:,ir,j],ap[:,:,:,:,:,:,ir,j],FR[:,:,:,ir,j],ACd[:,:,:,irr,j])
+        lr = oc_V(ACu[i,j],FLu[i,j],ap[:,:,:,:,:,:,i,j],FRu[i,j],FL[ir,j],ap[:,:,:,:,:,:,ir,j],FR[ir,j],conj(ACd[irr,j]))
         e = Array(ein"pqrs, pqrs -> "(lr,h[1]))[]
         n = Array(ein"pprr -> "(lr))[]
         verbose && println("Vertical energy = $(e/n)")

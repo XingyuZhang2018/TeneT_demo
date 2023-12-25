@@ -21,7 +21,6 @@ LineSearches = "7.2"
 OMEinsum = "0.7"
 OMEinsumContractionOrders = "0.8"
 Optim = "1.7"
-TeneT = "0.1"
 Zygote = "0.6"
 julia = "1.7"
 

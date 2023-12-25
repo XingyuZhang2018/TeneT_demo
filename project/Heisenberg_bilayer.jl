@@ -1,6 +1,6 @@
 using TeneT_demo
 
-Ni,Nj = 2,2
+Ni,Nj = 1,1
 D, χ  = 2,20
 model = Heisenberg_bilayer(Ni,Nj,3.0,1.0)
 
