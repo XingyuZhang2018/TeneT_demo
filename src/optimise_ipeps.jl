@@ -3,6 +3,7 @@ using LinearAlgebra: norm
 using LineSearches
 using Random
 using Optim
+using ADFPCM
 
 export init_ipeps, optimise_ipeps
 
@@ -70,24 +71,47 @@ function energy(h, A, oc, key; verbose = true, savefile = true)
     ap = reshape(ap, D^2, D^2, D^2, D^2, 2, 2, Ni, Nj)
     M = ein"abcdeeij->abcdij"(ap)
 
-    env = obs_env(M; χ = χ, tol = tol, maxiter = maxiter, miniter = miniter, verbose = verbose, savefile = savefile, infolder = folder, outfolder = folder)
+    MArray = M[:,:,:,:,1,1]
+	Random.seed!(42)
+	env = FPCM(permutedims(MArray, (4,1,2,3)), 
+    ADFPCM.Params(tol = 1e-10, χ=χ, 
+                  maxiter=10, miniter=1, 
+                  infolder = folder, verbose = verbose)
+    )
+
+    # env = obs_env(M; χ = χ, tol = tol, maxiter = maxiter, miniter = miniter, verbose = verbose, savefile = savefile, infolder = folder, outfolder = folder)
     e = expectation_value(h, ap, env, oc, key)
     return e
 end
 
 function expectation_value(h, ap, env, oc, key)
-    _, ALu, Cu, ARu, ALd, Cd, ARd, FL, FR, FLu, FRu = env
+    # _, ALu, Cu, ARu, ALd, Cd, ARd, FL, FR, FLu, FRu = env
     folder, model, atype, Ni, Nj, D, χ, tol, maxiter, miniter, verbose = key
     oc_H, oc_V = oc
-    ACu = ALCtoAC(ALu, Cu)
-    ACd = ALCtoAC(ALd, Cd)
+    # ACu = ALCtoAC(ALu, Cu)
+    # ACd = ALCtoAC(ALd, Cd)
+
+	@unpack Cul, Cld, Cdr, Cru, Tu, Tl, Td, Tr = env
+	# save("./example/M.jld2", "M", MArray)
+    
+	ACu = ein"abc->cba"(Tu)
+    ACd = Td
+    ARu = ein"abc->cba"(Tu)
+    ARd = Td
+	FL = ein"(ab,bcd),de->ace"(Cul,Tl,Cld)
+	FR = ein"(ab,bcd),de->eca"(Cdr,Tr,Cru)
+
+	FLu = ein"ab,bcd->acd"(Cul,Tl)
+	FRu = ein"abc,cd->dba"(Tr,Cru)
+    FLd = ein"abc,cd->abd"(Tl,Cld)
+    FRd = ein"ab,bcd->dca"(Cdr,Tr)
 
     etol = 0
     for j = 1:Nj, i = 1:Ni
         verbose && println("===========$i,$j===========")
         ir = Ni + 1 - i
         jr = j + 1 - (j==Nj) * Nj
-        lr = oc_H(FL[:,:,:,i,j],ACu[:,:,:,i,j],ap[:,:,:,:,:,:,i,j],ACd[:,:,:,ir,j],FR[:,:,:,i,jr],ARu[:,:,:,i,jr],ap[:,:,:,:,:,:,i,jr],ARd[:,:,:,ir,jr])
+        lr = oc_H(FL,ACu,ap[:,:,:,:,:,:,i,j],ACd,FR,ARu,ap[:,:,:,:,:,:,i,jr],ARd)
         e = Array(ein"pqrs, pqrs -> "(lr,h))[]
         n =  Array(ein"pprr -> "(lr))[]
         verbose && println("Horizontal energy = $(e/n)")
@@ -95,7 +119,7 @@ function expectation_value(h, ap, env, oc, key)
 
         ir  =  i + 1 - (i==Ni) * Ni
         irr = Ni - i + (i==Ni) * Ni
-        lr = oc_V(ACu[:,:,:,i,j],FLu[:,:,:,i,j],ap[:,:,:,:,:,:,i,j],FRu[:,:,:,i,j],FL[:,:,:,ir,j],ap[:,:,:,:,:,:,ir,j],FR[:,:,:,ir,j],ACd[:,:,:,irr,j])
+        lr = oc_V(ACu,FLu,ap[:,:,:,:,:,:,i,j],FRu,FLd,ap[:,:,:,:,:,:,ir,j],FRd,ACd)
         e = Array(ein"pqrs, pqrs -> "(lr,h))[]
         n = Array(ein"pprr -> "(lr))[]
         verbose && println("Vertical energy = $(e/n)")
