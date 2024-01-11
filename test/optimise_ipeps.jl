@@ -20,7 +20,7 @@ end
     @show energy(h, A, oc, key; verbose = true, savefile = true)
 end
 
-@testset "optimise_ipeps" for Ni = [1], Nj = [1], D in [3], χ in [20]
+@testset "optimise_ipeps" for Ni = [1], Nj = [1], D in [2], χ in [10]
     Random.seed!(42)
     model = Heisenberg(Ni,Nj,-1.0,-1.0,1.0)
     A, key = init_ipeps(model; Ni=Ni, Nj=Nj, D=D, χ=χ, verbose= false)

@@ -73,8 +73,8 @@ function energy(h, A, oc, key; verbose = true, savefile = true)
 
     MArray = M[:,:,:,:,1,1]
 	Random.seed!(42)
-	env = FPCM(permutedims(MArray, (4,1,2,3)), 
-    ADFPCM.Params(tol = 1e-10, χ=χ, 
+	env = ADFPCM.env(permutedims(MArray, (4,1,2,3)), 
+    ADFPCM.FPCM(tol = 1e-14, χ=χ, 
                   maxiter=10, miniter=1, 
                   infolder = folder, verbose = verbose)
     )
