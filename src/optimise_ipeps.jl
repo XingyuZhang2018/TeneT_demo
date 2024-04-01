@@ -1,10 +1,31 @@
 using FileIO
-using LinearAlgebra: norm
+using LinearAlgebra: norm, det, svd
 using LineSearches
 using Random
 using Optim
-
+using KrylovKit
+using Printf
 export init_ipeps, optimise_ipeps
+
+"""
+    indexperm_symmetrize(ipeps)
+return a `SquareIPEPS` based on `ipeps` that is symmetric under
+permutation of its virtual indices.
+```
+        4
+        │
+ 1 ── ipeps ── 3
+        │
+        2
+```
+"""
+function indexperm_symmetrize(ipeps)
+    ipeps += permutedims(ipeps, (1,4,3,2,5,6,7)) # up-down
+    ipeps += permutedims(ipeps, (3,2,1,4,5,6,7)) # left-right
+    # ipeps += permutedims(ipeps, (2,1,4,3,5,6,7)) # diagonal
+    # ipeps += permutedims(ipeps, (4,3,2,1,5,6,7)) # rotation
+    return ipeps / norm(ipeps)
+end
 
 """
     init_ipeps(model::HamiltonianModel; D::Int, χ::Int, tol::Real, maxiter::Int)
@@ -66,11 +87,12 @@ BCVUMPS with parameters `χ`, `tol` and `maxiter`.
 """
 function energy(h, A, oc, key; verbose = true, savefile = true)
     folder, model, atype, Ni, Nj, D, χ, tol, maxiter, miniter, verbose = key
+    # A = indexperm_symmetrize(A)
     ap = ein"abcdeij,fghmnij->afbgchdmenij"(A, conj(A))
     ap = reshape(ap, D^2, D^2, D^2, D^2, 2, 2, Ni, Nj)
     M = ein"abcdeeij->abcdij"(ap)
 
-    env = obs_env(M; χ = χ, tol = tol, maxiter = maxiter, miniter = miniter, verbose = verbose, savefile = savefile, infolder = folder, outfolder = folder)
+    env = obs_env(M; updown = true, χ = χ, tol = tol, maxiter = maxiter, miniter = miniter, verbose = verbose, savefile = savefile, infolder = folder, outfolder = folder)
     e = expectation_value(h, ap, env, oc, key)
     return e
 end
@@ -115,18 +137,50 @@ two-site hamiltonian `h`. The minimization is done using `Optim` with default-me
 providing `optimmethod`. Other options to optim can be passed with `optimargs`.
 The energy is calculated using vumps with key include parameters `χ`, `tol` and `maxiter`.
 """
-function optimise_ipeps(A::AbstractArray, key; f_tol = 1e-6, opiter = 100, optimmethod = LBFGS(m = 20))
+function optimise_ipeps(A::AbstractArray, key; ifprecondition = false, f_tol = 1e-6, opiter = 100, optimmethod = LBFGS(m = 20))
     folder, model, atype, Ni, Nj, D, χ, tol, maxiter, miniter, verbose = key
 
     h = hamiltonian(model)
     oc = optcont(D, χ)
     f(x) = real(energy(h, x, oc, key))
-    g(x) = Zygote.gradient(f,x)[1]
-    message = "time  steps   energy           grad_norm\n"
-    printstyled(message; bold=true, color=:red)
-    flush(stdout)
+    function g(x)
+        # f(x)
+        grad = Zygote.gradient(f,x)[1]
+        if ifprecondition 
+            chkp_file_up   = folder*"/up_D$(D^2)_χ$(χ).jld2"
+            chkp_file_down = folder*"/up_D$(D^2)_χ$(χ).jld2"
+            chkp_file_obs = folder*"/obs_D$(D^2)_χ$(χ).jld2"
+            envup = load(chkp_file_up)["env"]
+            envdown = load(chkp_file_down)["env"]
+
+            ACu = ALCtoAC(envup.AL, envup.C)
+            ACd = ALCtoAC(envdown.AL, envdown.C)
+            FLo, FRo = load(chkp_file_obs)["env"]
+
+            ap = ein"abcdeij,fghmnij->afbgchdmenij"(x, conj(x))
+            ap = reshape(ap, D^2, D^2, D^2, D^2, 2, 2, Ni, Nj)
+            M = ein"abcdeeij->abcdij"(ap)
+
+            n = ein"(((abcij,adfij),dgebij),fghij),cehij->"(ACu,FLo,M,ACd,FRo)[]
+
+            ACu = reshape(ACu, χ, D, D, χ)
+            ACd = reshape(ACd, χ, D, D, χ)
+            FLo = reshape(FLo, χ, D, D, χ)
+            FRo = reshape(FRo, χ, D, D, χ)
+            ρ = ein"((jafk,kbgl),mchl),jdim -> afbgchdi"(FLo,ACd,FRo,ACu)
+            # F = svd(reshape(ein"afbgchdi->abcdfghi"(ρ), D^4, D^4))
+            # @show prod(F.S)
+
+            grad, info = linsolve(x->ein"abcdexy, afbgchdi->fghiexy"(x, ρ), grad*n; isposdef = true, maxiter=1)
+            # @show info
+        end
+        return grad
+    end
+    # message = "time  steps   energy           grad_norm\n"
+    # printstyled(message; bold=true, color=:red)
+    # flush(stdout)
     res = optimize(f, g, 
-        A, optimmethod,inplace = false,
+        A, optimmethod, inplace = false,
         Optim.Options(f_tol=f_tol, iterations=opiter,
         extended_trace=true,
         callback=os->writelog(os, key)),
@@ -140,7 +194,9 @@ end
 return the optimise infomation of each step, including `time` `iteration` `energy` and `g_norm`, saved in `/data/model_D_chi_tol_maxiter.log`. Save the final `ipeps` in file `/data/model_D_chi_tol_maxiter.jid2`
 """
 function writelog(os::OptimizationState, key=nothing)
-    message = "$(round(os.metadata["time"],digits=1))   $(os.iteration)       $(round(os.value,digits=10))    $(round(os.g_norm,digits=10))\n"
+    # message = "$(round(os.metadata["time"],digits=1))   $(os.iteration)       $(round(os.value,digits=10))    $(round(os.g_norm,digits=10))\n"
+
+    message = @sprintf("i = %5d\tt = %0.2f\tenergy = %.15f \tgnorm = %.3e\n", os.iteration, os.metadata["time"], os.value, os.g_norm)
 
     printstyled(message; bold=true, color=:red)
     flush(stdout)
