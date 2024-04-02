@@ -3,6 +3,7 @@ using LinearAlgebra: norm
 using LineSearches
 using Random
 using Optim
+using KrylovKit
 
 export init_ipeps, optimise_ipeps
 
@@ -183,6 +184,7 @@ providing `optimmethod`. Other options to optim can be passed with `optimargs`.
 The energy is calculated using vumps with key include parameters `χ`, `tol` and `maxiter`.
 """
 function optimise_ipeps(A::AbstractArray, key; 
+    ifprecondition = false,
     maxiter_ad=10, miniter_ad=3, f_tol = 1e-6, opiter = 100, 
     optimmethod = LBFGS(m = 20))
 
@@ -197,6 +199,34 @@ function optimise_ipeps(A::AbstractArray, key;
         f(x)
         println("true backward:")
         grad = Zygote.gradient(ff,atype(x))[1]
+        if ifprecondition 
+            chkp_file_up   = folder*"/$D/up_D$(D[1]^2)_χ$(χ).jld2"
+            # chkp_file_down = folder*"/$D/up_D$(D[1]^2)_χ$(χ).jld2"
+            chkp_file_obs = folder*"/$D/obs_D$(D[1]^2)_χ$(χ).jld2"
+            envup = load(chkp_file_up)["env"]
+            # envdown = load(chkp_file_down)["env"]
+
+            ACu = ALCtoAC(atype(envup.AL), atype(envup.C))
+            ACd = ACu
+            FLo, FRo = atype.(load(chkp_file_obs)["env"])
+
+            x = atype(x)
+            ap = ein"abcdeij,fghmnij->afbgchdmenij"(x, conj(x))
+            ap = reshape(ap, D[1]^2,D[2]^2,D[3]^2,D[4]^2, 2, 2, Ni, Nj)
+            M = ein"abcdeeij->abcdij"(ap)
+
+            n = Array(ein"(((abcij,adfij),dgebij),fghij),cehij->"(ACu,FLo,M,ACd,FRo))[]
+
+            ACu = reshape(ACu, χ, D[4], D[4], χ)
+            ACd = reshape(ACd, χ, D[2], D[2], χ)
+            FLo = reshape(FLo, χ, D[1], D[1], χ)
+            FRo = reshape(FRo, χ, D[3], D[3], χ)
+            ρ = ein"((jafk,kbgl),mchl),jdim -> afbgchdi"(FLo,ACd,FRo,ACu)
+            # F = svd(reshape(ein"afbgchdi->abcdfghi"(ρ), D^4, D^4))
+            # @show prod(F.S)
+            grad, info = KrylovKit.linsolve(x->ein"abcdexy, afbgchdi->fghiexy"(x, ρ), grad*n; isposdef = true, maxiter=1)
+            info.converged != 1 && @warn("linsolve doesn't converged")
+        end
         return grad
     end
     message = "time  steps   energy           grad_norm\n"
