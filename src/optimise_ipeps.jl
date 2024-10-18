@@ -47,9 +47,16 @@ a ────┬──c     c──┬──── a
 f     g           h     i 
 
 f     g           h     i 
-├─ d ─┼─ j     j ─┼─ d ─┤
-│     b           b     │
-a ────┴──k     k──┴──── a
+├─ d ─┼─ j     j ─┼─ d ─┤               
+│     b           b     │            a ────┬──── c    
+a ────┴──k     k──┴──── a            │     b     │     
+                                     ├─ d ─┼─ e ─┤   
+                                     f     g     h     
+a ────┬──c───┬───f───┬──── h         ├─ i ─┼─ j ─┤             
+│     b      e       g     │         k     l     m            
+├─ i ─┼─ j  ─┼─  k  ─┼─ l ─┤         ├─ n ─┼─ o ─┤              
+│     n      t       v     │         │     u     │                       
+m ────┴──o ──┴───u───┴──── w         t ────┴──── v            
                                           
 ```
 where the central two block are six order tensor have extra bond `pq` and `rs`
@@ -71,7 +78,10 @@ function optcont(D::Int, χ::Int)
     oc_corner = ein"(adf,abc),dgebpq->cefgpq", ein"(cba,adi),ehdbpq->cehipq",
                 ein"(fda,abk),dbjgpq->fgjkpq", ein"(ida,kba),jbdhpq->hijkpq"
     oc_HV = ein"((cefgpq,cehist),fgjkuv),hijkwx->pqstuvwx"
-    oc_H, oc_V, oc_corner, oc_HV
+    oc_3H = ein"((((((abc,aim),injbpq),mno),cef),jtke),otu),(((fgh,hlw),kvlgrs),uvw)->pqrs"
+    oc_3V = ein"((((((abc,adf),dgebpq),ceh),fik),iljg),hjm),(((knt,tuv),nuolrs),mov)->pqrs"
+
+    return oc_H, oc_V, oc_corner, oc_HV, oc_3H, oc_3V
 end
 
 """
@@ -93,7 +103,7 @@ end
 function expectation_value(h, ap, env, oc, key)
     _, ALu, Cu, ARu, ALd, Cd, ARd, FL, FR, FLu, FRu = env
     folder, model, atype, Ni, Nj, D, χ, tol, maxiter, miniter, verbose = key
-    oc_H, oc_V, oc_corner, oc_HV = oc
+    oc_H, oc_V, oc_corner, oc_HV, oc_3H, oc_3V = oc
     ACu = ALCtoAC(ALu, Cu)
     ACd = ALCtoAC(ALd, Cd)
 
@@ -101,25 +111,44 @@ function expectation_value(h, ap, env, oc, key)
     for j = 1:Nj, i = 1:Ni
         verbose && println("===========$i,$j===========")
         jr  = mod1(j + 1, Nj)
+        jr3 = mod1(j + 2, Nj)
         ir  = mod1(i + 1, Ni)
+        ir3 = mod1(i + 2, Ni)
         irr = mod1(Ni - i, Ni)
+        id1 = mod1(Ni + 1 - i, Ni)
+        id3 = mod1(Ni - 1 - i, Ni)
+
         lt = oc_corner[1](FLu[:,:,:,i,j], ACu[:,:,:,i,j], ap[:,:,:,:,:,:,i,j])
         rt = oc_corner[2](ARu[:,:,:,i,jr], FRu[:,:,:,i,jr], ap[:,:,:,:,:,:,i,jr])
         lb = oc_corner[3](FL[:,:,:,ir,j], ACd[:,:,:,irr,j], ap[:,:,:,:,:,:,ir,j])
         rb = oc_corner[4](FR[:,:,:,ir,jr], ARd[:,:,:,irr,jr], ap[:,:,:,:,:,:,ir,jr])
-        
+
         lrtb = oc_HV(lt, rt, lb, rb)
         n = Array(ein"ppssuuww -> "(lrtb))[]
-        e12 = Array(ein"pqstuuww, pqst -> "(lrtb,atype(h[1])))[]
-        e13 = Array(ein"pqssuvww, pquv -> "(lrtb,atype(h[1])))[]
-        e14 = Array(ein"pqssuuwx, pqwx -> "(lrtb,atype(h[2])))[]
-        e23 = Array(ein"ppstuvww, stuv -> "(lrtb,atype(h[2])))[]
+        e1h = Array(ein"pqstuuww, pqst -> "(lrtb,atype(h[1])))[]
+        e1v = Array(ein"pqssuvww, pquv -> "(lrtb,atype(h[1])))[]
+        e2d1 = Array(ein"pqssuuwx, pqwx -> "(lrtb,atype(h[2])))[]
+        e2d2 = Array(ein"ppstuvww, stuv -> "(lrtb,atype(h[2])))[]
 
-        verbose && println("energy12 = $(e12/n)")
-        verbose && println("energy13 = $(e13/n)")
-        verbose && println("energy14 = $(e14/n)")
-        verbose && println("energy23 = $(e23/n)")
-        etol += (e12 + e13 + e14 + e23)/n
+        M_m_H = ein"abcdee->abcd"(ap[:,:,:,:,:,:,i,jr])
+        h3 = oc_3H(ACu[:,:,:,i,j], FL[:,:,:,i,j], ap[:,:,:,:,:,:,i,j], ACd[:,:,:,id1,j], ARu[:,:,:,i,jr], M_m_H, ARd[:,:,:,id1,jr], ARu[:,:,:,i,jr3], FR[:,:,:,i,jr3], ap[:,:,:,:,:,:,i,jr3], ARd[:,:,:,id1,jr3])
+
+        M_m_V = ein"abcdee->abcd"(ap[:,:,:,:,:,:,ir,j])
+        v3 = oc_3V(ACu[:,:,:,i,j], FLu[:,:,:,i,j], ap[:,:,:,:,:,:,i,j], FRu[:,:,:,i,j], FLu[:,:,:,ir,j], M_m_V, FRu[:,:,:,ir,j], FL[:,:,:,ir3,j], ACd[:,:,:,id3,j], ap[:,:,:,:,:,:,ir3,j], FR[:,:,:,ir3,j])
+
+        n_h3 = Array(ein"pprr -> "(h3))[]
+        n_v3 = Array(ein"pprr -> "(v3))[]
+        e3h = Array(ein"pqrs, pqrs -> "(h3,atype(h[3])))[]
+        e3v = Array(ein"pqrs, pqrs -> "(v3,atype(h[3])))[]
+        
+        verbose && println("energy1h = $(e1h/n)")
+        verbose && println("energy1v = $(e1v/n)")
+        verbose && println("energy2d1 = $(e2d1/n)")
+        verbose && println("energy2d2 = $(e2d2/n)")
+        verbose && println("energy3h = $(e3h/n_h3)")
+        verbose && println("energy3v = $(e3v/n_v3)")
+
+        etol += (e1h + e1v + e2d1 + e2d2)/n + e3h/n_h3 + e3v/n_v3
     end
 
     verbose && println("e = $(etol/Ni/Nj)")
