@@ -1,12 +1,3 @@
-using TeneT: _arraytype
-using OMEinsum
-using Zygote
-
-export Ising, Heisenberg
-export hamiltonian
-
-const isingβc = log(1+sqrt(2))/2
-
 abstract type HamiltonianModel end
 
 """

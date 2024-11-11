@@ -1,57 +1,60 @@
-using OMEinsum
-using TeneT: ALCtoAC
-
-export observable
+using OMEinsumContractionOrders
 
 """
-    observable(env, model::MT, type)
-return the `type` observable of the `model`. Requires that `type` tensor defined in model_tensor(model, Val(:type)).
+    oc_H, oc_V = optcont(D::Int, χ::Int)
+optimise the follow two einsum contractions for the given `D` and `χ` which are used to calculate the energy of the 2-site hamiltonian:
+```
+                                            a ────┬──── c          
+a ────┬──c ──┬──── f                        │     b     │  
+│     b      e     │                        ├─ e ─┼─ f ─┤  
+├─ g ─┼─  h ─┼─ i ─┤                        g     h     i 
+│     k      n     │                        ├─ j ─┼─ k ─┤ 
+j ────┴──l ──┴──── o                        │     m     │ 
+                                            l ────┴──── n 
+```
+where the central two block are six order tensor have extra bond `pq` and `rs`
 """
-function observable(env, model::MT, ::Val{:Z}) where {MT <: HamiltonianModel}
-    _, ALu, Cu, ARu, ALd, Cd, ARd, FL, FR, FLu, FRu = env
-    atype = _arraytype(ALu)
-    M   = atype(model_tensor(model, Val(:bulk)))
-    χ,D,Ni,Nj = size(ALu)[[1,2,4,5]]
+function optcont(D::Int, χ::Int)
+    sd = Dict('a' => χ, 'b' => D^2,'c' => χ, 'e' => D^2, 'f' => χ, 'g' => D^2, 'h' => D^2, 'i' => D^2, 'j' => χ, 'k' => D^2, 'l' => χ, 'n' => D^2, 'o' => χ, 'p' => 2, 'q' => 2, 'r' => 2, 's' => 2)
+    # for seed =20:100
+    seed = 60
+	Random.seed!(seed)
+	# oc_H = optimize_code(ein"agj,abc,gkhbpq,jkl,fio,cef,hniers,lno -> pqrs", sd, TreeSA())
+    oc_H = ein"(((agj,abc),gkhbpq),jkl),(((fio,cef),hniers),lno) -> pqrs"
+	print("Horizontal Contraction Complexity(seed=$(seed))",OMEinsum.timespace_complexity(oc_H,sd),"\n")
     
-    z_tol = 1
-    ACu = ALCtoAC(ALu, Cu)
-
-    for j = 1:Nj,i = 1:Ni
-        ir = i + 1 - Ni * (i==Ni)
-        jr = j + 1 - Nj * (j==Nj)
-        z = ein"(((adf,abc),dgeb),ceh),fgh ->"(FLu[:,:,:,i,j],ACu[:,:,:,i,j],M[:,:,:,:,i,j],FRu[:,:,:,i,j],conj(ACu[:,:,:,ir,j]))
-        λ = ein"(acd,ab),(bce,de) ->"(FLu[:,:,:,i,jr],Cu[:,:,i,j],FRu[:,:,:,i,j],conj(Cu[:,:,ir,j]))
-        z_tol *= Array(z)[]/Array(λ)[]
-    end
-    return z_tol^(1/Ni/Nj)
+    sd = Dict('a' => χ, 'b' => D^2, 'c' => χ, 'e' => D^2, 'f' => D^2, 'g' => χ, 'h' => D^2, 'i' => χ, 'j' => D^2, 'k' => D^2, 'l' => χ, 'm' => D^2, 'n' => χ, 'r' => 2, 's' => 2, 'p' => 2, 'q' => 2)
+    # oc_V = optimize_code(ein"abc,aeg,ehfbpq,cfi,gjl,jmkhrs,ikn,lmn -> pqrs", sd, TreeSA())
+    oc_V = ein"(((abc,aeg),ehfbpq),cfi),(gjl,(jmkhrs,(ikn,lmn))) -> pqrs"
+    print("Vertical Contraction Complexity(seed=$(seed))",OMEinsum.timespace_complexity(oc_V,sd),"\n") 
+    oc_H, oc_V
 end
 
-function observable(env, model::MT, type) where {MT <: HamiltonianModel}
-    _, ALu, Cu, ARu, ALd, Cd, ARd, FL, FR, FLu, FRu = env
-    χ,D,Ni,Nj = size(ALu)[[1,2,4,5]]
-    atype = _arraytype(ALu)
-    M     = atype(model_tensor(model, Val(:bulk)))
-    M_obs = atype(model_tensor(model, type      ))
-    obs_tol = 0
-    ACu = ALCtoAC(ALu, Cu)
-    ACd = ALCtoAC(ALd, Cd)
 
-    for j = 1:Nj,i = 1:Ni
+function expectation_value(h, ap, env, oc, params::iPEPSOptimize)
+    @unpack ACu, ARu, ACd, ARd, FLu, FRu, FLo, FRo = env
+    Ni, Nj = size(ap)
+    oc_H, oc_V = oc
+    etol = 0
+    for j = 1:Nj, i = 1:Ni
+        params.verbosity >= 4 && println("===========$i,$j===========")
         ir = Ni + 1 - i
-        obs = ein"(((adf,abc),dgeb),fgh),ceh -> "(FL[:,:,:,i,j],ACu[:,:,:,i,j],M_obs[:,:,:,:,i,j],ACd[:,:,:,ir,j],FR[:,:,:,i,j])
-        λ = ein"(((adf,abc),dgeb),fgh),ceh -> "(FL[:,:,:,i,j],ACu[:,:,:,i,j],M[:,:,:,:,i,j],ACd[:,:,:,ir,j],FR[:,:,:,i,j])
-        obs_tol += Array(obs)[]/Array(λ)[]
+        jr = mod1(j + 1, Nj)
+        lr = oc_H(FLo[i,j],ACu[i,j],ap[i,j],conj(ACd[ir,j]),FRo[i,jr],ARu[i,jr],ap[i,jr],conj(ARd[ir,jr]))
+        e = Array(ein"pqrs, pqrs -> "(lr,h))[]
+        n =  Array(ein"pprr -> "(lr))[]
+        params.verbosity >= 4 && println("Horizontal energy = $(e/n)")
+        etol += e/n
+
+        ir  =  mod1(i + 1, Ni)
+        irr = mod1(Ni - i, Ni) 
+        lr = oc_V(ACu[i,j],FLu[i,j],ap[i,j],FRu[i,j],FLo[ir,j],ap[ir,j],FRo[ir,j],conj(ACd[irr,j]))
+        e = Array(ein"pqrs, pqrs -> "(lr,h))[]
+        n = Array(ein"pprr -> "(lr))[]
+        params.verbosity >= 4 && println("Vertical energy = $(e/n)")
+        etol += e/n
     end
-    if type == Val(:mag)
-        obs_tol = abs(obs_tol)
-    end
-    return obs_tol/Ni/Nj
+
+    params.verbosity >= 4 && println("e = $(etol/Ni/Nj)")
+    return etol/Ni/Nj
 end
-
-"""
-    magofβ(::Ising,β)
-return the analytical result for the magnetisation at inverse temperature
-`β` for the 2d classical ising model.
-"""
-magofβ(model::Ising) = model.β > isingβc ? (1-sinh(2*model.β)^-4)^(1/8) : 0.
-
