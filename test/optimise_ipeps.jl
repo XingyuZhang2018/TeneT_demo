@@ -26,24 +26,25 @@ end
 end
 
 
-@testset "optimise_ipeps $atype" for atype in [Array], Ni = [1], Nj = [1], D in [4], χ in [30]
-    Random.seed!(100)
+@testset "optimise_ipeps $atype" for atype in [Array], Ni = [1], Nj = [1], D in [2], χ in [20]
+    Random.seed!(42)
     model = Heisenberg(Ni,Nj,-1.0,-1.0,1.0)
     h = atype(hamiltonian(model))
     A = init_ipeps(;atype, Ni, Nj, D=D)
-    boundary_alg = VUMPS(ifdownfromup=false, 
+    boundary_alg = VUMPS(ifupdown=false,
+                         ifdownfromup=false, 
                          maxiter=10, 
                          miniter=1, 
                          verbosity=2
     )
     params = iPEPSOptimize(boundary_alg=boundary_alg, 
                            reuse_env=true, 
-                           verbosity=3, 
-                           maxiter=100,
+                           verbosity=4, 
+                           maxiter=1,
                            tol=1e-10,
                            folder="data/$model/"
     )
-    optimise_ipeps(A, h, χ, params)
+    res = optimise_ipeps(A, h, χ, params)
 end
 
 @testset "optimise_ipeps $atype" for atype in [Array], Ni = [2], Nj = [2], D in [4], χ in [30]

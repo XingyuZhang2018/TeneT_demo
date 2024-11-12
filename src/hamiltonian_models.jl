@@ -1,29 +1,17 @@
 abstract type HamiltonianModel end
 
 """
-    Ising(Ni::Int,Nj::Int,β)
-    
-return a struct representing the `Ni`x`Nj` Ising model with inverse temperature `β`
-"""
-struct Ising <: HamiltonianModel 
-    Ni::Int
-    Nj::Int
-    β::Float64
-end
-
-"""
     Heisenberg(Ni::Int,Nj::Int,Jx::T,Jy::T,Jz::T) where {T<:Real}
     
 return a struct representing the `Ni`x`Nj` heisenberg model with couplings `Jz`, `Jx` and `Jy`
 """
-struct Heisenberg{T<:Real} <: HamiltonianModel
-    Ni::Int
-    Nj::Int
-    Jx::T
-    Jy::T
-    Jz::T
+@kwdef mutable struct Heisenberg{T<:Real} <: HamiltonianModel
+    Ni::Int = 1
+    Nj::Int = 1
+    Jx::T = -1.0
+    Jy::T = -1.0
+    Jz::T = 1.0
 end
-Heisenberg(Ni,Nj) = Heisenberg(Ni,Nj,1.0,1.0,1.0)
 
 const Sx = Float64[0 1; 1 0]/2
 const Sy = ComplexF64[0 -1im; 1im 0]/2
@@ -34,7 +22,8 @@ const Sz = Float64[1 0; 0 -1]/2
 return the heisenberg hamiltonian for the `model` as a two-site operator.
 """
 function hamiltonian(model::Heisenberg)
-    model.Jx * ein"ij,kl -> ijkl"(Sx, Sx) +
+    h = model.Jx * ein"ij,kl -> ijkl"(Sx, Sx) +
     model.Jy * ein"ij,kl -> ijkl"(Sy, Sy) +
     model.Jz * ein"ij,kl -> ijkl"(Sz, Sz)
+    return ein"ijcd,kc,ld -> ijkl"(h,Sx*2,(Sx*2)')
 end

@@ -23,10 +23,10 @@ permutation of its virtual indices.
 ```
 """
 function indexperm_symmetrize(ipeps)
-    ipeps += map(x->permutedims(x, (1,4,3,2,5)), ipeps) # up-down
-    ipeps += map(x->permutedims(x, (3,2,1,4,5)), ipeps) # left-right
-    # ipeps += permutedims(ipeps, (2,1,4,3,5)) # diagonal
-    # ipeps += permutedims(ipeps, (4,3,2,1,5)) # rotation
+    ipeps += permutedims(ipeps, (1,4,3,2,5)) # up-down
+    ipeps += permutedims(ipeps, (3,2,1,4,5)) # left-right
+    ipeps += permutedims(ipeps, (2,1,4,3,5)) # diagonal
+    ipeps += permutedims(ipeps, (4,3,2,1,5)) # rotation
     return ipeps / norm(ipeps)
 end
 
@@ -36,7 +36,7 @@ Initial `bcipeps` and give `key` for use of later optimization. The key include 
 The iPEPS is random initial if there isn't any calculation before, otherwise will be load from file `/data/model_D_chi_tol_maxiter.jld2`
 """
 function init_ipeps(;atype = Array, Ni::Int, Nj::Int, D::Int)
-    A = atype(rand(ComplexF64,D,D,D,D,2,Ni,Nj))
+    A = atype(randn(D,D,D,D,2,Ni,Nj))
     A /= norm(A)
     return A
 end
@@ -47,7 +47,7 @@ return the energy of the `bcipeps` 2-site hamiltonian `h` and calculated via a
 BCVUMPS with parameters `χ`, `tol` and `maxiter`.
 """
 function energy(A, h, rt, oc, params::iPEPSOptimize)
-    # A = indexperm_symmetrize(A)
+    A = indexperm_symmetrize.(A)
     D = size(A[1], 1)
     ap = [reshape(ein"abcde,fghmn->afbgchdmen"(A, conj(A)), D^2,D^2,D^2,D^2, 2,2) for A in A]
     M  = [ein"abcdee->abcd"(ap) for ap in ap]
@@ -71,8 +71,9 @@ function optimise_ipeps(A::AbstractArray, h, χ::Int, params::iPEPSOptimize)
     oc = optcont(D, χ)
 
     Ni, Nj = size(A)[end-1:end]
-    M = reshape(ein"abcdeij,fghmeij->afbgchdmij"(A, conj(A)), D^2,D^2,D^2,D^2,Ni,Nj)
-    M = [M[:,:,:,:,i,j] for i = 1:Ni, j = 1:Nj]
+    A′ = [A[:,:,:,:,:,i,j] for i = 1:Ni, j = 1:Nj]
+    A′ = indexperm_symmetrize.(A′)
+    M = [reshape(ein"abcde,fghme->afbgchdm"(A′, conj(A′)), D^2,D^2,D^2,D^2) for A′ in A′]
     rt = VUMPSRuntime(M, χ, params.boundary_alg)
 
     function f(A) 
