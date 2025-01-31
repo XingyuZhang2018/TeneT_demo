@@ -12,7 +12,7 @@ using Parameters
 using Zygote
 using TeneT
 
-using TeneT: ALCtoAC, _arraytype, update!
+using TeneT: ALCtoAC, _arraytype, update!, mcform, rightenv, rightCenv
 
 export Heisenberg
 export hamiltonian
@@ -21,6 +21,9 @@ export iPEPSOptimize, init_ipeps, optimise_ipeps, energy
 
 include("defaults.jl")
 include("hamiltonian_models.jl")
+include("init_ipeps.jl")
+include("build_A_M.jl")
+include("precondition.jl")
 include("optimise_ipeps.jl")
 include("observable.jl")
 

@@ -19,6 +19,7 @@ module Defaults
     const folder = "data"
     const show_every = 1
     const save_every = 1
+    const ifprecondition = false
 
     finalize!(x, f, g, numiter) = (x, f, g)
 end
