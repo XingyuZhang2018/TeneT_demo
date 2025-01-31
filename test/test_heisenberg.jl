@@ -5,20 +5,21 @@ using TeneT
 using Optim
 using LinearAlgebra
 
-Random.seed!(42)
+seed = 47
+Random.seed!(seed)
 atype = Array
-D, χ = 2, 20
-Ni, Nj = 1, 1
+D, χ = 2, 10
+Ni, Nj = 2, 2
 model = Heisenberg(Ni,Nj,-1.0,-1.0,1.0)
 h = atype(hamiltonian(model))
-No = 23
-folder = "data/$model/"
+No = 253
+folder = "data/$model/seed$seed/AD+SU_opp/"
 
 boundary_alg = VUMPS(ifupdown=true,
                      ifdownfromup=false,
-                     ifsimple_eig=false,
+                     ifsimple_eig=true,
                      maxiter=10, 
-                     miniter=1, 
+                     miniter=3, 
                      verbosity=2
 )
 params = iPEPSOptimize(boundary_alg=boundary_alg, 
@@ -26,10 +27,11 @@ params = iPEPSOptimize(boundary_alg=boundary_alg,
                        optimizer=LBFGS(m=20),
                        reuse_env=true, 
                        verbosity=4, 
-                       maxiter=100,
-                       tol=1e-6,
+                       maxiter=0,
+                       tol=1e-10,
                        folder=folder,
-                       ifprecondition=false
+                       ifprecondition=false,
+                       ifSU=true
 )
 A = init_ipeps(;atype, No, d=2, Ni, Nj, D, χ, params)
 

@@ -9,6 +9,7 @@
     show_every::Int = Defaults.show_every
     save_every::Int = Defaults.save_every
     ifprecondition::Bool = Defaults.ifprecondition
+    ifSU::Bool = Defaults.ifSU
 end
 
 """
@@ -68,12 +69,12 @@ function optimise_ipeps(A::AbstractArray, h, χ::Int, params::iPEPSOptimize;
     D = size(A, 1)
     oc = optcont(D, χ)
 
-    A′ = build_A(A)
+    A′ = build_A(A, params)
     A′ = restriction_ipeps(A′)
     _, M = build_M(A′)
     rt = VUMPSRuntime(M, χ, params.boundary_alg)
     function f(A)
-        A = build_A(A)
+        A = build_A(A, params)
         A = restriction_ipeps(A)
         return real(energy(A, h, rt, oc, params))
     end
