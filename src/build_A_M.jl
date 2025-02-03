@@ -61,24 +61,27 @@ end
 function build_A(A, params::iPEPSOptimize)
     D, d, Ni, Nj = Zygote.@ignore size(A)[[1,5,6,7]]
     A′ = [A[:,:,:,:,:,i,j] for i = 1:Ni, j = 1:Nj]
-    if params.ifSU
+    if params.SUτ != 0.0
         h = hamiltonian(Heisenberg(Ni,Nj,-1.0,-1.0,1.0))
-        exp_h = _arraytype(A)(reshape(exp(0.1 * reshape(permutedims(h,(1,3,2,4)),d^2,d^2)), d,d,d,d))
+        # h = ein"ab,cd ->abcd"(I(d),I(d)) # for testing purpose
+        exp_h = _arraytype(A)(reshape(exp(-params.SUτ * reshape(permutedims(h,(1,3,2,4)),d^2,d^2)), d,d,d,d))
         Ah = Zygote.Buffer(A′)
-        for i in 1:Ni
-            AAh_h = ein"(abgfh,gcdei),hijk->fabjcdek"(A′[i,1], A′[i,2], exp_h)
+        for j in 1:Nj, i in 1:Ni
+            jr = mod1(j + 1, Nj)
+            AAh_h = ein"(abgfh,gcdei),hijk->fabjcdek"(A′[i,j], A′[i,jr], exp_h)
             U, S, V = svd(reshape(AAh_h, D^3*d, D^3*d))
-            Ah[i,1] = permutedims(reshape(U[:,1:D] * Diagonal(sqrt.(S[1:D])), D,D,D,d,D), (2,3,5,1,4))
-            Ah[i,2] = reshape(Diagonal(sqrt.(S[1:D])) * V'[1:D,:], D,D,D,D,d)
+            Ah[i,j] = permutedims(reshape(U[:,1:D] * Diagonal(sqrt.(S[1:D])), D,D,D,d,D), (2,3,5,1,4))
+            Ah[i,jr] = reshape(Diagonal(sqrt.(S[1:D])) * V'[1:D,:], D,D,D,D,d)
         end
         Ah = copy(Ah)
 
         Av = Zygote.Buffer(Ah)
-        for j in 1:Nj
-            AAh_v = ein"(bgfah,cdegi),hijk->fabjcdek"(Ah[1,j], Ah[2,j], exp_h)
+        for j in 1:Nj, i in 1:Ni
+            ir = mod1(i + 1, Ni)
+            AAh_v = ein"(bgfah,cdegi),hijk->fabjcdek"(Ah[i,j], Ah[ir,j], exp_h)
             U, S, V = svd(reshape(AAh_v, D^3*d, D^3*d))
-            Av[1,j] = permutedims(reshape(U[:,1:D] * Diagonal(sqrt.(S[1:D])), D,D,D,d,D), (3,5,1,2,4))
-            Av[2,j] = permutedims(reshape(Diagonal(sqrt.(S[1:D])) * V'[1:D,:], D,D,D,D,d), (2,3,4,1,5))
+            Av[i,j] = permutedims(reshape(U[:,1:D] * Diagonal(sqrt.(S[1:D])), D,D,D,d,D), (3,5,1,2,4))
+            Av[ir,j] = permutedims(reshape(Diagonal(sqrt.(S[1:D])) * V'[1:D,:], D,D,D,D,d), (2,3,4,1,5))
         end
         Av = copy(Av)
 

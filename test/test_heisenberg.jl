@@ -8,12 +8,13 @@ using LinearAlgebra
 seed = 47
 Random.seed!(seed)
 atype = Array
-D, χ = 2, 10
+D, χ = 2, 20
 Ni, Nj = 2, 2
 model = Heisenberg(Ni,Nj,-1.0,-1.0,1.0)
 h = atype(hamiltonian(model))
-No = 253
-folder = "data/$model/seed$seed/AD+SU_opp/"
+No = 0
+SUτ = -0.1
+folder = "data/$model/seed$seed/AD+SU$SUτ/"
 
 boundary_alg = VUMPS(ifupdown=true,
                      ifdownfromup=false,
@@ -27,11 +28,11 @@ params = iPEPSOptimize(boundary_alg=boundary_alg,
                        optimizer=LBFGS(m=20),
                        reuse_env=true, 
                        verbosity=4, 
-                       maxiter=0,
+                       maxiter=1000,
                        tol=1e-10,
                        folder=folder,
+                       SUτ=SUτ,
                        ifprecondition=false,
-                       ifSU=true
 )
 A = init_ipeps(;atype, No, d=2, Ni, Nj, D, χ, params)
 

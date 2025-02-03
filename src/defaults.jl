@@ -19,8 +19,8 @@ module Defaults
     const folder = "data"
     const show_every = 1
     const save_every = 1
+    const SUτ = 0.0
     const ifprecondition = false
-    const ifSU = false
 
     finalize!(x, f, g, numiter) = (x, f, g)
 end

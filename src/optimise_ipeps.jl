@@ -4,12 +4,12 @@
     verbosity::Int = Defaults.verbosity
     maxiter::Int = Defaults.fpgrad_maxiter
     tol::Real = Defaults.fpgrad_tol
+    SUτ::Real = Defaults.SUτ
     optimizer = Defaults.optimizer
     folder::String = Defaults.folder
     show_every::Int = Defaults.show_every
     save_every::Int = Defaults.save_every
     ifprecondition::Bool = Defaults.ifprecondition
-    ifSU::Bool = Defaults.ifSU
 end
 
 """
