@@ -55,6 +55,6 @@ function expectation_value(h, ap, env, oc, params::iPEPSOptimize)
         etol += e/n
     end
 
-    params.verbosity >= 3 && println("energy = $(etol/Ni/Nj)")
+    params.verbosity >= 4 && println("energy = $(etol/Ni/Nj)")
     return etol/Ni/Nj
 end

@@ -2,45 +2,45 @@ using TeneT_demo
 using Random
 using CUDA
 using TeneT
-using Optim
+using OptimKit
 using LinearAlgebra
 
 seed = 47
 Random.seed!(seed)
-atype = Array
-D, χ = 2, 20
-Ni, Nj = 2, 2
+atype = CuArray
+D, χ = 2, 10
+Ni, Nj = 1, 1
 model = Heisenberg(Ni,Nj,-1.0,-1.0,1.0)
 h = atype(hamiltonian(model))
 No = 0
-SUτ = -0.1
-folder = "data/$model/seed$seed/AD+SU$SUτ/"
+SUτ = 0.0
+folder = "data/$model/seed$seed/withprecondition/"
 
 boundary_alg = VUMPS(ifupdown=true,
                      ifdownfromup=false,
                      ifsimple_eig=true,
                      maxiter=10, 
                      miniter=3, 
-                     verbosity=2
+                     verbosity=0
 )
 params = iPEPSOptimize(boundary_alg=boundary_alg, 
                     #    optimizer=GradientDescent(),
-                       optimizer=LBFGS(m=20),
+                       optimizer=LBFGS(; maxiter=100, verbosity=0, gradtol=1e-8),
                        reuse_env=true, 
-                       verbosity=4, 
-                       maxiter=1000,
-                       tol=1e-10,
+                       verbosity=3, 
                        folder=folder,
                        SUτ=SUτ,
-                       ifprecondition=false,
+                       ifprecondition=true,
+
 )
 A = init_ipeps(;atype, No, d=2, Ni, Nj, D, χ, params)
 
 function _restriction_ipeps(A)
-   # A += permutedims(conj(A), (1,4,3,2,5)) # up-down
-   # A += permutedims(conj(A), (3,2,1,4,5)) # left-right
-   # A += permutedims(conj(A), (2,1,4,3,5)) # diagonal
-   # A += permutedims(conj(A), (4,3,2,1,5)) # rotation
+   A += map(A->permutedims(conj(A), (1,4,3,2,5)), A) # up-down
+   A += map(A->permutedims(conj(A), (3,2,1,4,5)), A) # left-right
+   A += map(A->permutedims(conj(A), (2,1,4,3,5)), A) # diagonal
+   A += map(A->permutedims(conj(A), (4,3,2,1,5)), A) # rotation
+
    # Ar = Zygote.Buffer(A)
    # Ni, Nj = size(A)
    # for j in 1:Nj, i in 1:Ni

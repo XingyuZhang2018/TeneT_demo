@@ -78,35 +78,25 @@ function optimise_ipeps(A::AbstractArray, h, χ::Int, params::iPEPSOptimize;
         A = restriction_ipeps(A)
         return real(energy(A, h, rt, oc, params))
     end
-    function g(A)
-        grad = Zygote.gradient(f,A)[1]
-        if params.ifprecondition 
-            grad = precondition(A, grad)
-        end
-        return grad
+    function fg(x)
+        return f(x), gradient(f, x)[1]
     end
-    res = optimize(f, g, 
-        A, params.optimizer, inplace = false,
-        Optim.Options(f_tol=params.tol, iterations=params.maxiter,
-        extended_trace=true,
-        callback=os->writelog(os, params, D, χ)
-        ))
-    return res
+    alg = params.optimizer
+    t0 = time()
+    _precondition(x, g) = params.ifprecondition ? precondition_invese_single_envir(x, g, rt, params, restriction_ipeps) : g
+    x, f, g, numfg, normgradhistory = optimize(fg, A, alg; precondition=_precondition, inner = _inner, finalize! = (x, f, g, iter)->_finalize!(x, f, g, iter, D, χ, params, t0))
+    return x, f, g, numfg, normgradhistory
 end
 
-"""
-    writelog(os::OptimizationState, key=nothing)
-
-return the optimise infomation of each step, including `time` `iteration` `energy` and `g_norm`, saved in `/data/model_D_chi_tol_maxiter.log`. Save the final `ipeps` in file `/data/model_D_chi_tol_maxiter.jid2`
-"""
-function writelog(os::OptimizationState, params::iPEPSOptimize, D::Int, χ::Int)
+_inner(x, dx1, dx2) = real(dot(dx1, dx2))
+function _finalize!(x, f, g, iter, D, χ, params, t0)
     @unpack folder = params
 
-    message = @sprintf("i = %5d\tt = %0.2f sec\tenergy = %.15f \tgnorm = %.3e\n", os.iteration, os.metadata["time"], os.value, os.g_norm)
+    message = @sprintf("i = %5d\tt = %0.2f sec\tenergy = %.15f \tgnorm = %.3e\n", iter, time() - t0, f, norm(g))
 
     folder = joinpath(folder, "D$(D)_χ$(χ)")
     !(ispath(folder)) && mkpath(folder)
-    if params.verbosity >= 3 && os.iteration % params.show_every == 0
+    if params.verbosity >= 3 && iter % params.show_every == 0
         printstyled(message; bold=true, color=:red)
         flush(stdout)
 
@@ -114,9 +104,9 @@ function writelog(os::OptimizationState, params::iPEPSOptimize, D::Int, χ::Int)
         write(logfile, message)
         close(logfile)
     end
-    if params.save_every != 0 && os.iteration % params.save_every == 0
-        save(joinpath(folder, "ipeps", "ipeps_No.$(os.iteration).jld2"), "bcipeps", os.metadata["x"])
+    if params.save_every != 0 && iter % params.save_every == 0
+        save(joinpath(folder, "ipeps", "ipeps_No.$(iter).jld2"), "bcipeps", x)
     end
-
-    return false
-end
+    
+    return x, f, g
+end 

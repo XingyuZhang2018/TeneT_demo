@@ -5,7 +5,7 @@ using KrylovKit
 using LinearAlgebra
 using LineSearches
 using Random
-using Optim
+using OptimKit
 using OMEinsum
 using Printf
 using Parameters

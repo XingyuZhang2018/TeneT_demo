@@ -5,7 +5,7 @@ module Defaults
     const VERBOSE_ITER = 3
     const VERBOSE_ALL = 4
 
-    using Optim
+    using OptimKit
     using KrylovKit
     const contr_maxiter = 100
     const contr_miniter = 4
@@ -15,7 +15,7 @@ module Defaults
     const verbosity = VERBOSE_ITER
     const reuse_env = true
     const rrule_alg = GMRES(; tol=1e1contr_tol)
-    const optimizer = LBFGS(m = 20)
+    const optimizer = LBFGS(; verbosity = 0)
     const folder = "data"
     const show_every = 1
     const save_every = 1

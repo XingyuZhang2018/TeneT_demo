@@ -7,9 +7,11 @@ function init_ipeps(;atype = Array, No, Ni::Int, Nj::Int, D::Int, d::Int, χ::In
     if No != 0
         file = "$(params.folder)/D$(D)_χ$(χ)/ipeps/ipeps_No.$(No).jld2"
         A = load(file, "bcipeps")
+        println("load ipeps from $file")
     else
         A = atype(rand(ComplexF64, D,D,D,D,d,Ni,Nj))
         A /= norm(A)
+        println("random initial ipeps")
         # A = [A[:,:,:,:,:,i,j] for i = 1:Ni, j = 1:Nj]
         # A = restriction_ipeps(A)
         # M = [reshape(ein"abcde,fghme->afbgchdm"(A, conj(A)), D^2,D^2,D^2,D^2) for A in A]
