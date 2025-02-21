@@ -15,7 +15,7 @@ h = atype(hamiltonian(model))
 No = 20
 SUτ = 0.0
 folder = "data/$model/seed$seed/withprecondition/"
-
+pattern = [1;;]
 boundary_alg = VUMPS(ifupdown=true,
                      ifdownfromup=false,
                      ifsimple_eig=true,
@@ -23,7 +23,8 @@ boundary_alg = VUMPS(ifupdown=true,
                      miniter=3, 
                      verbosity=3
 )
-params = iPEPSOptimize(boundary_alg=boundary_alg, 
+params = iPEPSOptimize(pattern=pattern,
+                       boundary_alg=boundary_alg, 
                     #    optimizer=GradientDescent(),
                        optimizer=LBFGS(; maxiter=1000, verbosity=0, gradtol=1e-8),
                        reuse_env=true, 

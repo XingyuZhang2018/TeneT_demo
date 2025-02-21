@@ -1,4 +1,5 @@
 @kwdef mutable struct iPEPSOptimize
+    pattern::Matrix{Int}
     boundary_alg::VUMPS
     reuse_env::Bool = Defaults.reuse_env
     verbosity::Int = Defaults.verbosity
@@ -34,7 +35,7 @@ return the energy of the `bcipeps` 2-site hamiltonian `h` and calculated via a
 BCVUMPS with parameters `χ`, `tol` and `maxiter`.
 """
 function energy(A, h, rt, oc, params::iPEPSOptimize)
-    ap, M = build_M(A)
+    ap, M = build_M(A, params)
     # n = 1
     # Zygote.@ignore begin
     #     rt′ = leading_boundary(rt, M, params.boundary_alg)
@@ -71,7 +72,7 @@ function optimise_ipeps(A::AbstractArray, h, χ::Int, params::iPEPSOptimize;
 
     A′ = build_A(A, params)
     A′ = restriction_ipeps(A′)
-    _, M = build_M(A′)
+    _, M = build_M(A′, params)
     rt = VUMPSRuntime(M, χ, params.boundary_alg)
     function f(A)
         A = build_A(A, params)

@@ -7,7 +7,7 @@ end
 function precondition_invese_single_envir(A, grad, rt, params, restriction_ipeps)
     A = build_A(A, params)
     A = restriction_ipeps(A)
-    _, M = build_M(A) 
+    _, M = build_M(A, params) 
     # rt′ = leading_boundary(rt, M, params.boundary_alg)
     # Zygote.@ignore params.reuse_env && update!(rt, rt′)
 

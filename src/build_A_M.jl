@@ -91,9 +91,9 @@ function build_A(A, params::iPEPSOptimize)
     end
 end
 
-function build_M(A)
+function build_M(A, params)
     D = size(A[1], 1)
-    ap = [reshape(ein"abcde,fghmn->afbgchdmen"(A, conj(A)), D^2,D^2,D^2,D^2, 2,2) for A in A]
-    M  = [ein"abcdee->abcd"(ap) for ap in ap]
+    ap = StructArray([reshape(ein"abcde,fghmn->afbgchdmen"(A[1], conj(A[1])), D^2,D^2,D^2,D^2, 2,2)], params.pattern)
+    M  = StructArray([ein"abcdee->abcd"(ap[1])], params.pattern)
     return ap, M
 end
