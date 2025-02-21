@@ -23,5 +23,5 @@ function init_ipeps(;atype = Array, No, Ni::Int, Nj::Int, D::Int, d::Int, χ::In
         # A /= sqrt(n[1])
         # A = reshape(A[1], D, D, D, D, d, Ni, Nj)
     end
-    return A
+    return atype(A)
 end

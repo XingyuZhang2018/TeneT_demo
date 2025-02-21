@@ -8,11 +8,11 @@ using LinearAlgebra
 seed = 47
 Random.seed!(seed)
 atype = CuArray
-D, χ = 2, 10
+D, χ = 4, 20
 Ni, Nj = 1, 1
 model = Heisenberg(Ni,Nj,-1.0,-1.0,1.0)
 h = atype(hamiltonian(model))
-No = 0
+No = 20
 SUτ = 0.0
 folder = "data/$model/seed$seed/withprecondition/"
 
@@ -21,13 +21,13 @@ boundary_alg = VUMPS(ifupdown=true,
                      ifsimple_eig=true,
                      maxiter=10, 
                      miniter=3, 
-                     verbosity=0
+                     verbosity=3
 )
 params = iPEPSOptimize(boundary_alg=boundary_alg, 
                     #    optimizer=GradientDescent(),
-                       optimizer=LBFGS(; maxiter=100, verbosity=0, gradtol=1e-8),
+                       optimizer=LBFGS(; maxiter=1000, verbosity=0, gradtol=1e-8),
                        reuse_env=true, 
-                       verbosity=3, 
+                       verbosity=4, 
                        folder=folder,
                        SUτ=SUτ,
                        ifprecondition=true,
@@ -58,4 +58,4 @@ function _restriction_ipeps(A)
 end
 
 optimise_ipeps(A, h, χ, params;
-               restriction_ipeps = _restriction_ipeps)
+               restriction_ipeps = _restriction_ipeps);

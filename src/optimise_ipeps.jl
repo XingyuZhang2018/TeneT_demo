@@ -84,7 +84,11 @@ function optimise_ipeps(A::AbstractArray, h, χ::Int, params::iPEPSOptimize;
     alg = params.optimizer
     t0 = time()
     _precondition(x, g) = params.ifprecondition ? precondition_invese_single_envir(x, g, rt, params, restriction_ipeps) : g
-    x, f, g, numfg, normgradhistory = optimize(fg, A, alg; precondition=_precondition, inner = _inner, finalize! = (x, f, g, iter)->_finalize!(x, f, g, iter, D, χ, params, t0))
+    x, f, g, numfg, normgradhistory = optimize(fg, A, alg; 
+                                               precondition=_precondition, 
+                                               inner = _inner, 
+                                               finalize! = (x, f, g, iter)->_finalize!(x, f, g, iter, D, χ, params, t0)
+    )
     return x, f, g, numfg, normgradhistory
 end
 
@@ -105,7 +109,7 @@ function _finalize!(x, f, g, iter, D, χ, params, t0)
         close(logfile)
     end
     if params.save_every != 0 && iter % params.save_every == 0
-        save(joinpath(folder, "ipeps", "ipeps_No.$(iter).jld2"), "bcipeps", x)
+        save(joinpath(folder, "ipeps", "ipeps_No.$(iter).jld2"), "bcipeps", Array(x))
     end
     
     return x, f, g
