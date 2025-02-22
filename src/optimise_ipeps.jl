@@ -84,19 +84,23 @@ function optimise_ipeps(A::AbstractArray, h, χ::Int, params::iPEPSOptimize;
     end
     alg = params.optimizer
     t0 = time()
-    _precondition(x, g) = params.ifprecondition ? precondition_invese_single_envir(x, g, rt, params, restriction_ipeps) : g
+    fδEi = [1.0,1.0,0]
+    _precondition(x, g) = params.ifprecondition ? precondition_invese_single_envir(x, g, rt, params, restriction_ipeps, fδEi) : g
     x, f, g, numfg, normgradhistory = optimize(fg, A, alg; 
                                                precondition=_precondition, 
                                                inner = _inner, 
-                                               finalize! = (x, f, g, iter)->_finalize!(x, f, g, iter, D, χ, params, t0)
+                                               finalize! = (x, f, g, iter)->_finalize!(x, f, g, iter, D, χ, params, t0, fδEi)
     )
     return x, f, g, numfg, normgradhistory
 end
 
 _inner(x, dx1, dx2) = real(dot(dx1, dx2))
-function _finalize!(x, f, g, iter, D, χ, params, t0)
+function _finalize!(x, f, g, iter, D, χ, params, t0, fδEi)
     @unpack folder = params
 
+    fδEi[3] = iter
+    fδEi[2] = abs(fδEi[1] - f)
+    fδEi[1] = f
     message = @sprintf("i = %5d\tt = %0.2f sec\tenergy = %.15f \tgnorm = %.3e\n", iter, time() - t0, f, norm(g))
 
     folder = joinpath(folder, "D$(D)_χ$(χ)")

@@ -4,7 +4,10 @@ function reinv(ρ, δ)
     ρ = reshape(ρ, D, D, D, D, D, D, D, D)
 end
 
-function precondition_invese_single_envir(A, grad, rt, params, restriction_ipeps)
+function precondition_invese_single_envir(A, grad, rt, params, restriction_ipeps, fδEi)
+    if fδEi[2] > 0.01 || fδEi[3] <= 20
+        return grad
+    end
     A = build_A(A, params)
     A = restriction_ipeps(A)
     _, M = build_M(A, params) 
@@ -29,5 +32,6 @@ function precondition_invese_single_envir(A, grad, rt, params, restriction_ipeps
     # δ = norm(grad) > 1e-1 ? norm(grad)/1e3 : 1e-12
     δ = 1e-8
     gradnew, _ = linsolve(x->ein"abcdexy, abcdfghi->fghiexy"(x, reinv(ρ, δ)), grad*n; isposdef = true, maxiter=1)
+    # gradnew = ein"abcdexy, abcdfghi->fghiexy"(grad * n, reinv(ρ, δ))
     return gradnew
 end

@@ -5,18 +5,23 @@ using TeneT
 using OptimKit
 using LinearAlgebra
 
-seed = 47
+seed = 55
 Random.seed!(seed)
-atype = CuArray
-D, χ = 4, 20
+atype = Array
+D, χ = 3, 20
 Ni, Nj = 1, 1
 model = Heisenberg(Ni,Nj,-1.0,-1.0,1.0)
 h = atype(hamiltonian(model))
-No = 20
+No = 0
 SUτ = 0.0
-folder = "data/$model/seed$seed/withprecondition/"
+ifprecondition = true
+if ifprecondition
+    folder = "data/$model/seed$seed/withprecondition/"
+else
+    folder = "data/$model/seed$seed/withoutprecondition/"
+end
 pattern = [1;;]
-boundary_alg = VUMPS(ifupdown=true,
+boundary_alg = VUMPS(ifupdown=false,
                      ifdownfromup=false,
                      ifsimple_eig=true,
                      maxiter=10, 
@@ -26,12 +31,12 @@ boundary_alg = VUMPS(ifupdown=true,
 params = iPEPSOptimize(pattern=pattern,
                        boundary_alg=boundary_alg, 
                     #    optimizer=GradientDescent(),
-                       optimizer=LBFGS(; maxiter=1000, verbosity=0, gradtol=1e-8),
+                       optimizer=LBFGS(; maxiter=1000, verbosity=0, gradtol=1e-7),
                        reuse_env=true, 
                        verbosity=4, 
                        folder=folder,
                        SUτ=SUτ,
-                       ifprecondition=true,
+                       ifprecondition=ifprecondition
 
 )
 A = init_ipeps(;atype, No, d=2, Ni, Nj, D, χ, params)
