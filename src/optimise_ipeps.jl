@@ -65,22 +65,22 @@ two-site hamiltonian `h`. The minimization is done using `Optim` with default-me
 providing `optimmethod`. Other options to optim can be passed with `optimargs`.
 The energy is calculated using vumps with key include parameters `χ`, `tol` and `maxiter`.
 """
-function optimise_ipeps(A::AbstractArray, h, χ::Int, params::iPEPSOptimize;
+function optimise_ipeps(A, h, χ::Int, params::iPEPSOptimize;
                         restriction_ipeps = _restriction_ipeps)
-    D = size(A, 1)
+    D = size(A[1], 1)
     oc = optcont(D, χ)
 
-    A′ = build_A(A, params)
-    A′ = restriction_ipeps(A′)
+    A′ = restriction_ipeps(A)
+    A′ = build_A(A′, params)
     _, M = build_M(A′, params)
     rt = VUMPSRuntime(M, χ, params.boundary_alg)
     function f(A)
-        A = build_A(A, params)
         A = restriction_ipeps(A)
+        A = build_A(A, params)
         return real(energy(A, h, rt, oc, params))
     end
     function fg(x)
-        return f(x), gradient(f, x)[1]
+        return f(x), StructArray(gradient(f, x)[1].data, A.pattern)
     end
     alg = params.optimizer
     t0 = time()

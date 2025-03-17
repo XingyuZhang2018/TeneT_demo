@@ -26,4 +26,9 @@ function hamiltonian(model::Heisenberg)
     model.Jy * ein"ij,kl -> ijkl"(Sy, Sy) +
     model.Jz * ein"ij,kl -> ijkl"(Sz, Sz)
     return ein"ijcd,kc,ld -> ijkl"(h,Sx*2,(Sx*2)')
+    # U, S, V = svd(reshape(h,4,4))
+    # truc = sum(S .> 1e-10)
+    # h1 = U[:,1:truc] * Diagonal(S[1:truc]) 
+    # h2 = V[:,1:truc]'
+    # return h1, h2
 end
