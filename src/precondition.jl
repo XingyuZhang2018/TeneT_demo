@@ -38,7 +38,7 @@ function precondition_invese_single_envir(A, grad, rt, params, restriction_ipeps
     δ = fδEi[2]
     # δ = 1e-8
     # @show δ
-    gradnew, info = linsolve(x->δ * x + ein"(((iaej,jbfk),abcdp),idhl),lcgk->efghp"(FLo,conj(ACd),x,FRo,ACu)/n, grad[1]; isposdef = true, maxiter=1)
+    gradnew, info = linsolve(x->δ * x + ein"(((iaej,jbfk),abcdp),lcgk),idhl->efghp"(FLo,conj(ACd),x,FRo,ACu)/n, grad[1]; isposdef = true, maxiter=1)
     # @show info
     # gradnew = ein"abcdexy, abcdfghi->fghiexy"(grad, reshape(pinv(reshape(ρ, D^4, D^4) + I * δ), D, D, D, D, D, D, D, D))
     return StructArray([gradnew], grad.pattern)
