@@ -36,7 +36,8 @@ function expectation_value(h, ap, env, oc, params::iPEPSOptimize)
     Ni, Nj = size(ap)
     oc_H, oc_V = oc
     etol = 0
-    for j = 1:Nj, i = 1:Ni
+    for p in 1:length(ap)
+        i, j = Tuple(findfirst(==(p), ap.pattern))
         params.verbosity >= 4 && println("===========$i,$j===========")
         ir = Ni + 1 - i
         jr = mod1(j + 1, Nj)
@@ -46,15 +47,15 @@ function expectation_value(h, ap, env, oc, params::iPEPSOptimize)
         params.verbosity >= 4 && println("Horizontal energy = $(e/n)")
         etol += e/n
 
-        # ir  =  mod1(i + 1, Ni)
-        # irr = mod1(Ni - i, Ni) 
-        # lr = oc_V(ACu[i,j],FLu[i,j],ap[i,j],FRu[i,j],FLo[ir,j],ap[ir,j],FRo[ir,j],conj(ACd[irr,j]))
-        # e = Array(ein"pqrs, pqrs -> "(lr,h))[]
-        # n = Array(ein"pprr -> "(lr))[]
-        # params.verbosity >= 4 && println("Vertical energy = $(e/n)")
-        # etol += e/n
+        ir  =  mod1(i + 1, Ni)
+        irr = mod1(Ni - i, Ni) 
+        lr = oc_V(ACu[i,j],FLu[i,j],ap[i,j],FRu[i,j],FLo[ir,j],ap[ir,j],FRo[ir,j],conj(ACd[irr,j]))
+        e = Array(ein"pqrs, pqrs -> "(lr,h))[]
+        n = Array(ein"pprr -> "(lr))[]
+        params.verbosity >= 4 && println("Vertical energy = $(e/n)")
+        etol += e/n
     end
 
-    params.verbosity >= 4 && println("energy = $(etol/Ni/Nj*2)")
-    return etol/Ni/Nj*2
+    params.verbosity >= 4 && println("energy = $(etol/length(ap))")
+    return etol/length(ap)
 end

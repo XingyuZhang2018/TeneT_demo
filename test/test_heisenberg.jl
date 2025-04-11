@@ -8,14 +8,14 @@ using LinearAlgebra
 seed = 42
 Random.seed!(seed)
 atype = CuArray
-D, χ = 3, 50
-pattern = [1;;]
+D, χ = 3, 20
+pattern = [1 2; 2 1]
 Ni,Nj = size(pattern)
 model = Heisenberg(Ni,Nj,-1.0,-1.0,1.0)
 h = atype(hamiltonian(model))
 No = 0
 SUτ = 0.0
-ifprecondition = true
+ifprecondition = false
 if ifprecondition
     folder = "data/$model/seed$seed/withprecondition/"
 else
@@ -25,13 +25,14 @@ boundary_alg = VUMPS(ifupdown=true,
                      ifdownfromup=false,
                      ifsimple_eig=true,
                      maxiter=10, 
-                     miniter=1, 
+                     miniter=0, 
+                    #  miniter_ad=10,
                      verbosity=3
 )
-params = iPEPSOptimize(pattern=pattern,
+params = GradientOptimize(pattern=pattern,
                        boundary_alg=boundary_alg, 
                     #    optimizer=GradientDescent(),
-                       optimizer=LBFGS(; maxiter=1000, verbosity=1, gradtol=1e-7),
+                       optimizer=LBFGS(200; maxiter=100, verbosity=1, gradtol=1e-7),
                        reuse_env=true, 
                        verbosity=4, 
                        folder=folder,
@@ -44,10 +45,10 @@ A = init_ipeps(;atype, No, d=2, pattern, D, χ, params)
 
 # @show A[1] == A[1,1] A[2]==A[2,1] A[3]==A[1,2] A[4]==A[2,2]
 function _restriction_ipeps(A)
-   A += StructArray([permutedims(conj(A[1]), (1,4,3,2,5))], A.pattern) # up-down
-   A += StructArray([permutedims(conj(A[1]), (3,2,1,4,5))], A.pattern) # left-right
-   A += StructArray([permutedims(conj(A[1]), (2,1,4,3,5))], A.pattern) # diagonal
-   A += StructArray([permutedims(conj(A[1]), (4,3,2,1,5))], A.pattern) # skew-diagonal
+#    A += map(A->permutedims(conj(A), (1,4,3,2,5)), A) # up-down
+#    A += map(A->permutedims(conj(A), (3,2,1,4,5)), A) # left-right
+#    A += map(A->permutedims(conj(A), (2,1,4,3,5)), A) # diagonal
+#    A += map(A->permutedims(conj(A), (4,3,2,1,5)), A) # rotation
 
    # Ar = Zygote.Buffer(A)
    # Ni, Nj = size(A)

@@ -1,10 +1,11 @@
 function precondition_invese_single_envir(A, grad, rt, params, restriction_ipeps, fδEi)
-    size(A) == (1, 1) || throw(Base.error("precondition only supports 1x1 unit cell currently"))
+    # size(A) == (1,) || throw(Base.error("precondition only supports 1x1 unit cell currently"))
     if fδEi[2] > 0.01 || fδEi[3] <= 20
         return grad
     end
-    A = build_A(A, params)
+    δ = fδEi[2]
     A = restriction_ipeps(A)
+    A = build_A(A, params)
     _, M = build_M(A, params) 
     # rt′ = leading_boundary(rt, M, params.boundary_alg)
     # Zygote.@ignore params.reuse_env && update!(rt, rt′)
@@ -12,34 +13,41 @@ function precondition_invese_single_envir(A, grad, rt, params, restriction_ipeps
     env = VUMPSEnv(rt, M, params.boundary_alg)
     @unpack ACu, ARu, ACd, ARd, FLu, FRu, FLo, FRo = env
 
-    n = sum(ein"(((abc,adf),dgeb),fgh),ceh->"(ACu[1],FLo[1],M[1],conj(ACd[1]),FRo[1]))
-    # @show n n/ein"abc,abc->"(FLo[1], FRo[1])[]
-    # nn, _ = rightenv(ARu, conj(ARd), M, FLo; ifobs=true) 
-    # @show nn
     χ,D = size(ACu[1])[[1,2]]
     D = Int(sqrt(D))
-    ACu = reshape(ACu[1], χ, D, D, χ)
-    ACd = reshape(ACd[1], χ, D, D, χ)
-    FLo = reshape(FLo[1], χ, D, D, χ)
-    FRo = reshape(FRo[1], χ, D, D, χ)
-    # ρ = ein"((jafk,kbgl),mchl),jdim -> abcdfghi"(FLo,conj(ACd),FRo,ACu)/n
-    # D = size(ρ, 1)
-    # ρo = reshape(ρ, D^4, D^4)
-    # eigvals = eigen(Array(ρo)).values
-    # ConditionNumber = eigvals[end] / eigvals[1] 
-    # @show ConditionNumber
-    # if norm(ConditionNumber) > 1e7
+    re(x) = reshape(x, χ, D, D, χ)
+
+    gradnew = deepcopy(grad)
+    Ni = size(M)[1]
+    for p in 1:length(M)
+        i, j = Tuple(findfirst(==(p), M.pattern))
+        ir = Ni + 1 - i
+        n = sum(ein"(((abc,adf),dgeb),fgh),ceh->"(ACu[i,j],FLo[i,j],M[i,j],conj(ACd[ir,j]),FRo[i,j]))
+        gradnew[p], _ = linsolve(x->δ * x + ein"(((iaej,jbfk),abcdp),lcgk),idhl->efghp"(re(FLo[i,j]),re(conj(ACd[ir,j])),x,re(FRo[i,j]),re(ACu[i,j]))/n, grad[p]; isposdef = true, maxiter=1)
+    end
+
+    return gradnew
+end
+
+function hessian_vec_prod(f, V, v)
+    return ForwardDiff.derivative(t -> Zygote.gradient(f, V + t * v)[1], 0.0)
+end
+
+function precondition_invese_hessian(f, A, grad, fδEi)
+    size(A) == (1, ) || throw(Base.error("precondition only supports 1x1 unit cell currently"))
+    # if fδEi[2] > 0.01 || fδEi[3] <= 10
     #     return grad
     # end
-    # @show eigvals ConditionNumber
-    # @show eigvals
 
-    # δ = norm(grad) > 1e-1 ? norm(grad)/1e3 : 1e-12
-    δ = fδEi[2]
-    # δ = 1e-8
-    # @show δ
-    gradnew, info = linsolve(x->δ * x + ein"(((iaej,jbfk),abcdp),lcgk),idhl->efghp"(FLo,conj(ACd),x,FRo,ACu)/n, grad[1]; isposdef = true, maxiter=1)
-    # @show info
-    # gradnew = ein"abcdexy, abcdfghi->fghiexy"(grad, reshape(pinv(reshape(ρ, D^4, D^4) + I * δ), D, D, D, D, D, D, D, D))
-    return StructArray([gradnew], grad.pattern)
+    δ = 1e-8
+    @show δ
+    gradnew, info = linsolve(v->v*δ + hessian_vec_prod(f, A, v), grad; isposdef = true, maxiter=1)
+    @show info
+    return gradnew
+end
+
+function Base.Float64(x::ForwardDiff.Dual) 
+    # @show dump(x)
+    return x.value
+    # return x
 end

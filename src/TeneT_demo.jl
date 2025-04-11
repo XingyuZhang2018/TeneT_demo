@@ -9,6 +9,7 @@ using OptimKit
 using OMEinsum
 using Printf
 using Parameters
+using ForwardDiff
 using Zygote
 using TeneT
 
@@ -17,7 +18,8 @@ using TeneT: ALCtoAC, _arraytype, update!, mcform, rightenv, rightCenv
 export Heisenberg
 export hamiltonian
 export observable
-export iPEPSOptimize, init_ipeps, optimise_ipeps, energy
+export SUOptimize, FUOptimize, GradientOptimize, init_ipeps, optimise_ipeps, energy
+abstract type iPEPSOptimize end
 
 include("defaults.jl")
 include("hamiltonian_models.jl")
@@ -26,5 +28,6 @@ include("optimise_ipeps.jl")
 include("init_ipeps.jl")
 include("build_A_M.jl")
 include("observable.jl")
+include("SUFU.jl")
 
 end

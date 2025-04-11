@@ -1,4 +1,4 @@
-@kwdef mutable struct iPEPSOptimize
+@kwdef mutable struct GradientOptimize <: iPEPSOptimize
     pattern::Matrix{Int}
     boundary_alg::VUMPS
     reuse_env::Bool = Defaults.reuse_env
@@ -56,6 +56,13 @@ function energy(A, h, rt, oc, params::iPEPSOptimize)
     return expectation_value(h, ap, env, oc, params)
 end
 
+function energy_without_recal(A, h, rt, oc, params::iPEPSOptimize)
+    ap, M = build_M(A, params)
+    env = VUMPSEnv(rt, M, params.boundary_alg)
+    return expectation_value(h, ap, env, oc, params)
+end
+
+
 """
     optimise_ipeps(A::AbstractArray, key; f_tol = 1e-6, opiter = 100, optimmethod = LBFGS(m = 20))
 
@@ -80,11 +87,17 @@ function optimise_ipeps(A, h, χ::Int, params::iPEPSOptimize;
         return real(energy(A, h, rt, oc, params))
     end
     function fg(x)
-        return f(x), StructArray(gradient(f, x)[1].data, A.pattern)
+        return f(x), gradient(f, x)[1]
     end
     alg = params.optimizer
     t0 = time()
     fδEi = [1.0,1.0,0]
+    # _precondition(x, g) = params.ifprecondition ? precondition_invese_single_envir(x, g, rt, params, restriction_ipeps, fδEi) : g
+    function f_without_recal(A)
+        A = restriction_ipeps(A)
+        A = build_A(A, params)
+        return real(energy_without_recal(A, h, rt, oc, params))
+    end
     _precondition(x, g) = params.ifprecondition ? precondition_invese_single_envir(x, g, rt, params, restriction_ipeps, fδEi) : g
     x, f, g, numfg, normgradhistory = optimize(fg, A, alg; 
                                                precondition=_precondition, 
@@ -114,7 +127,7 @@ function _finalize!(x, f, g, iter, D, χ, params, t0, fδEi)
         close(logfile)
     end
     if params.save_every != 0 && iter % params.save_every == 0
-        save(joinpath(folder, "ipeps", "ipeps_No.$(iter).jld2"), "bcipeps", Array(x))
+        save(joinpath(folder, "ipeps", "ipeps_No.$(iter).jld2"), "bcipeps", Array.(x))
     end
     
     return x, f, g
