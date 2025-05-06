@@ -175,7 +175,7 @@ end
 
 function build_A(A, params)
     A = StructArray(A, params.pattern)
-    return A/norm(A)
+    return A
 end
 
 function build_A(A, params, rt)
@@ -188,9 +188,9 @@ function build_A(A, params, rt)
         
         A = hv_SU_update(A, params)
         # A = hv_FU_update(A, params, rt)
-        return A/norm(A)
+        return A
     else
-        return A/norm(A)
+        return A
     end
 end
 
