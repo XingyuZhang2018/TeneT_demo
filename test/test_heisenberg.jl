@@ -4,8 +4,9 @@ using CUDA
 using TeneT
 using OptimKit
 using LinearAlgebra
+using Zygote
 
-seed = 44
+seed = 42
 Random.seed!(seed)
 atype = CuArray
 D, χ = 3, 50
@@ -24,15 +25,16 @@ end
 boundary_alg = VUMPS(ifupdown=false,
                      ifdownfromup=false,
                      ifsimple_eig=true,
-                     maxiter=30, 
+                     maxiter=10, 
                      miniter=0, 
                      maxiter_ad=10,
+                     miniter_ad=3,
                      verbosity=3
 )
 params = GradientOptimize(pattern=pattern,
                        boundary_alg=boundary_alg, 
                     #    optimizer=GradientDescent(),
-                       optimizer=LBFGS(200; maxiter=100, verbosity=1, gradtol=1e-7),
+                       optimizer=LBFGS(200; maxiter=10000, verbosity=1, gradtol=1e-7),
                        reuse_env=true, 
                        verbosity=4, 
                        folder=folder,
@@ -63,6 +65,7 @@ function _restriction_ipeps(A)
    # end
    # Ar = copy(Ar)
    # return Ar/norm(Ar)
+   # λ = Zygote.@ignore norm(A)
    return A
 end
 

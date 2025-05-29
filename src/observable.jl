@@ -45,15 +45,15 @@ function expectation_value(h, ap, env, oc, params::iPEPSOptimize)
         e = Array(ein"pqrs, pqrs -> "(lr,h))[]
         n = Array(ein"pprr -> "(lr))[]
         params.verbosity >= 4 && println("Horizontal energy = $(e/n)")
-        etol += e/n
+        etol += 2*e/n
 
-        ir  =  mod1(i + 1, Ni)
-        irr = mod1(Ni - i, Ni) 
-        lr = oc_V(ACu[i,j],FLu[i,j],ap[i,j],FRu[i,j],FLo[ir,j],ap[ir,j],FRo[ir,j],conj(ACd[irr,j]))
-        e = Array(ein"pqrs, pqrs -> "(lr,h))[]
-        n = Array(ein"pprr -> "(lr))[]
-        params.verbosity >= 4 && println("Vertical energy = $(e/n)")
-        etol += e/n
+        # ir  =  mod1(i + 1, Ni)
+        # irr = mod1(Ni - i, Ni) 
+        # lr = oc_V(ACu[i,j],FLu[i,j],ap[i,j],FRu[i,j],FLo[ir,j],ap[ir,j],FRo[ir,j],conj(ACd[irr,j]))
+        # e = Array(ein"pqrs, pqrs -> "(lr,h))[]
+        # n = Array(ein"pprr -> "(lr))[]
+        # params.verbosity >= 4 && println("Vertical energy = $(e/n)")
+        # etol += e/n
     end
 
     params.verbosity >= 4 && println("energy = $(etol/length(ap))")

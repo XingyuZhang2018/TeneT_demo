@@ -87,7 +87,8 @@ function optimise_ipeps(A, h, χ::Int, params::iPEPSOptimize;
         return real(energy(A, h, rt, oc, params))
     end
     function fg(x)
-        return f(x), gradient(f, x)[1]
+        e, vjp = pullback(f, x)
+        return e, vjp(1)[1]
     end
     alg = params.optimizer
     t0 = time()

@@ -7,6 +7,7 @@ function precondition_invese_single_envir(A, grad, rt, params, restriction_ipeps
     A = restriction_ipeps(A)
     A = build_A(A, params)
     _, M = build_M(A, params) 
+    # Random.seed!(4564135)
     # rt = VUMPSRuntime(M, 1, params.boundary_alg)
     # rt = leading_boundary(rt, M, params.boundary_alg)
     # # Zygote.@ignore params.reuse_env && update!(rt, rt′)
@@ -24,6 +25,9 @@ function precondition_invese_single_envir(A, grad, rt, params, restriction_ipeps
         i, j = Tuple(findfirst(==(p), M.pattern))
         ir = Ni + 1 - i
         n = sum(ein"(((abc,adf),dgeb),fgh),ceh->"(ACu[i,j],FLo[i,j],M[i,j],conj(ACd[ir,j]),FRo[i,j]))
+        # P = ein"((iaej,jbfk),lcgk),idhl->abcdefgh"(re(FLo[i,j]),re(conj(ACd[ir,j])),re(FRo[i,j]),re(ACu[i,j]))/n
+        # λ,_ = eigen(reshape(P,D^4,D^4))
+        # @show real(λ[end-10:end])
         gradnew[p], _ = linsolve(x->δ * x + ein"(((iaej,jbfk),abcdp),lcgk),idhl->efghp"(re(FLo[i,j]),re(conj(ACd[ir,j])),x,re(FRo[i,j]),re(ACu[i,j]))/n, grad[p]; isposdef = true, maxiter=1)
     end
 
@@ -65,25 +69,34 @@ function precondition_invese_BP_envir(A, grad, rt, params, restriction_ipeps, f�
 
     D = Int(sqrt(size(M[1],1)))
     B = _arraytype(M[1])(randn(ComplexF64, D^2))
+    error = 1.0
     Z = 1.0
     for i in 1:100
         B = ein"((abcd,d),c),b -> a"(M[1],B,B,B)
         Z_n = dot(B,B)
         normalize!(B)
-        if norm(Z_n - Z) < 1e-15
+        error = norm(Z_n - Z)
+        if error < 1e-16
             break
         end
         Z = Z_n
     end
-
+    println("================================")
+    @show error, Z
+    println("================================")
     gradnew = deepcopy(grad)
     Ni = size(M)[1]
+    # reB = (reshape(B, D,D)+I*δ)^(-1)
     reB = reshape(B, D,D)
     for p in 1:length(M)
         i, j = Tuple(findfirst(==(p), M.pattern))
         ir = Ni + 1 - i
         n = sum(ein"((abcd,d),c),b,a ->"(M[1],B,B,B,B))
+        # P = ein"ae,bf,cg,dh->abcdefgh"(reB,reB,reB,reB)/n
+        # λ,_ = eigen(reshape(P,D^4,D^4))
+        # @show real(λ[end-10:end])
         gradnew[p], _ = linsolve(x->δ * x + ein"(((abcdp,ae),bf),cg),dh->efghp"(x,reB,reB,reB,reB)/n, grad[p]; isposdef = true, maxiter=1)
+        # gradnew[p] = ein"(((abcdp,ae),bf),cg),dh->efghp"(grad[p],reB,reB,reB,reB)*n
     end
 
     return gradnew
