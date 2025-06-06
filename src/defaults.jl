@@ -19,8 +19,13 @@ module Defaults
     const folder = "data"
     const show_every = 1
     const save_every = 1
+    const ifload_env = true
+    const ifsave_env = true
     const SUτ = 0.0
     const ifprecondition = false
+    const ifflatten = true
+    const forloop_iter = 1
+    const iter_precond = 20
 
     finalize!(x, f, g, numiter) = (x, f, g)
 end

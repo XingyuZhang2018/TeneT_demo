@@ -174,8 +174,7 @@ function one_bond_SU(A, params)
 end
 
 function build_A(A, params)
-    A = StructArray(A, params.pattern)
-    return A
+    return StructArray([A[:,:,:,:,:,i] for i in 1:length(unique(params.pattern))], params.pattern)
 end
 
 function build_A(A, params, rt)
@@ -197,7 +196,9 @@ end
 function build_M(A, params)
     D = size(A[1], 1)
     len = length(unique(params.pattern))
-    ap = StructArray([reshape(ein"abcde,fghmn->afbgchdmen"(A[i], conj(A[i])), D^2,D^2,D^2,D^2, 2,2) for i in 1:len], params.pattern)
-    M  = StructArray([ein"abcdee->abcd"(ap[i]) for i in 1:len], params.pattern)
-    return ap, M
+    if params.ifflatten
+        return StructArray([reshape(ein"abcde,fghme->afbgchdm"(A[i], conj(A[i])), D^2,D^2,D^2,D^2) for i in 1:len], params.pattern)
+    else
+        return A
+    end
 end

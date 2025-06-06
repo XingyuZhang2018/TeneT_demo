@@ -23,12 +23,13 @@ return the heisenberg hamiltonian for the `model` as a two-site operator.
 """
 function hamiltonian(model::Heisenberg)
     h = model.Jx * ein"ij,kl -> ijkl"(Sx, Sx) +
-    model.Jy * ein"ij,kl -> ijkl"(Sy, Sy) +
-    model.Jz * ein"ij,kl -> ijkl"(Sz, Sz)
-    return ein"ijcd,kc,ld -> ijkl"(h,Sx*2,(Sx*2)')
-    # U, S, V = svd(reshape(h,4,4))
-    # truc = sum(S .> 1e-10)
-    # h1 = U[:,1:truc] * Diagonal(S[1:truc]) 
-    # h2 = V[:,1:truc]'
-    # return h1, h2
+        model.Jy * ein"ij,kl -> ijkl"(Sy, Sy) +
+        model.Jz * ein"ij,kl -> ijkl"(Sz, Sz)
+    h = ein"ijcd,kc,ld -> ijkl"(h,Sx*2,(Sx*2)')
+    U, S, V = svd(reshape(h,4,4))
+    truc = sum(S .> 1e-10)
+    h1 = U[:,1:truc] * Diagonal(S[1:truc]) 
+    h2 = V[:,1:truc]'
+    d = size(Sx, 1)
+    return reshape(h1, d,d,truc), reshape(h2, truc,d,d)
 end

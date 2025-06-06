@@ -1,12 +1,12 @@
-function precondition_invese_single_envir(A, grad, rt, params, restriction_ipeps, fδEi)
+function precondition_invese_single_envir(A, grad, rt, params, restriction_ipeps, fδEi, iter_precond)
     # size(A) == (1,) || throw(Base.error("precondition only supports 1x1 unit cell currently"))
-    if fδEi[2] > 0.01 || fδEi[3] <= 20
+    if fδEi[2] > 0.01 || fδEi[3] <= iter_precond
         return grad
     end
     δ = fδEi[2]
     A = restriction_ipeps(A)
     A = build_A(A, params)
-    _, M = build_M(A, params) 
+    M = build_M(A, params) 
     # Random.seed!(4564135)
     # rt = VUMPSRuntime(M, 1, params.boundary_alg)
     # rt = leading_boundary(rt, M, params.boundary_alg)
@@ -24,11 +24,15 @@ function precondition_invese_single_envir(A, grad, rt, params, restriction_ipeps
     for p in 1:length(M)
         i, j = Tuple(findfirst(==(p), M.pattern))
         ir = Ni + 1 - i
-        n = sum(ein"(((abc,adf),dgeb),fgh),ceh->"(ACu[i,j],FLo[i,j],M[i,j],conj(ACd[ir,j]),FRo[i,j]))
+        n = contract_n1(FLo[i,j], ACu[i,j], A[i,j], conj(ACd[ir,j]), FRo[i,j]; params.forloop_iter)
         # P = ein"((iaej,jbfk),lcgk),idhl->abcdefgh"(re(FLo[i,j]),re(conj(ACd[ir,j])),re(FRo[i,j]),re(ACu[i,j]))/n
         # λ,_ = eigen(reshape(P,D^4,D^4))
         # @show real(λ[end-10:end])
-        gradnew[p], _ = linsolve(x->δ * x + ein"(((iaej,jbfk),abcdp),lcgk),idhl->efghp"(re(FLo[i,j]),re(conj(ACd[ir,j])),x,re(FRo[i,j]),re(ACu[i,j]))/n, grad[p]; isposdef = true, maxiter=1)
+        if params.ifflatten
+            gradnew[:,:,:,:,:,p], _ = linsolve(x->δ * x + ein"(((iaej,jbfk),abcdp),lcgk),idhl->efghp"(re(FLo[i,j]),re(conj(ACd[ir,j])),x,re(FRo[i,j]),re(ACu[i,j]))/n, grad[:,:,:,:,:,p]; isposdef = true, maxiter=1)
+        else
+            gradnew[:,:,:,:,:,p], _ = linsolve(x->δ * x + ein"(((iaej,jbfk),abcdp),lcgk),idhl->efghp"(FLo[i,j],conj(ACd[ir,j]),x,FRo[i,j],ACu[i,j])/n, grad[:,:,:,:,:,p]; isposdef = true, maxiter=1)
+        end
     end
 
     return gradnew

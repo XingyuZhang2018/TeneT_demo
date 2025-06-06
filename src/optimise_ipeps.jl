@@ -10,7 +10,12 @@
     folder::String = Defaults.folder
     show_every::Int = Defaults.show_every
     save_every::Int = Defaults.save_every
+    ifsave_env::Bool = Defaults.ifsave_env
+    ifload_env::Bool = Defaults.ifload_env
     ifprecondition::Bool = Defaults.ifprecondition
+    ifflatten::Bool = Defaults.ifflatten
+    forloop_iter::Int = Defaults.forloop_iter
+    iter_precond::Int = Defaults.iter_precond
 end
 
 """
@@ -34,8 +39,8 @@ end
 return the energy of the `bcipeps` 2-site hamiltonian `h` and calculated via a
 BCVUMPS with parameters `χ`, `tol` and `maxiter`.
 """
-function energy(A, h, rt, oc, params::iPEPSOptimize)
-    ap, M = build_M(A, params)
+function energy(A, h, rt, rt′, params::iPEPSOptimize)
+    M = build_M(A, params)
     # n = 1
     # Zygote.@ignore begin
     #     rt′ = leading_boundary(rt, M, params.boundary_alg)
@@ -50,16 +55,10 @@ function energy(A, h, rt, oc, params::iPEPSOptimize)
     # A /= sqrt(n[1])
     # ap = [reshape(ein"abcde,fghmn->afbgchdmen"(A, conj(A)), D^2,D^2,D^2,D^2, 2,2) for A in A]
     # M  = [ein"abcdee->abcd"(ap) for ap in ap]
-    rt′ = leading_boundary(rt, M, params.boundary_alg)
-    Zygote.@ignore params.reuse_env && update!(rt, rt′)
-    env = VUMPSEnv(rt′, M, params.boundary_alg)
-    return expectation_value(h, ap, env, oc, params)
-end
-
-function energy_without_recal(A, h, rt, oc, params::iPEPSOptimize)
-    ap, M = build_M(A, params)
+    rt, _ = leading_boundary(rt, M, params.boundary_alg)
+    Zygote.@ignore update!(rt′, rt)
     env = VUMPSEnv(rt, M, params.boundary_alg)
-    return expectation_value(h, ap, env, oc, params)
+    return expectation_value(h, A, env, params)
 end
 
 
@@ -74,17 +73,13 @@ The energy is calculated using vumps with key include parameters `χ`, `tol` and
 """
 function optimise_ipeps(A, h, χ::Int, params::iPEPSOptimize;
                         restriction_ipeps = _restriction_ipeps)
-    D = size(A[1], 1)
-    oc = optcont(D, χ)
-
-    A′ = restriction_ipeps(A)
-    A′ = build_A(A′, params)
-    _, M = build_M(A′, params)
-    rt = VUMPSRuntime(M, χ, params.boundary_alg)
+    D = size(A, 1)
+    rt = initialize_vumps_runtime(A, D, χ, params; restriction_ipeps)
+    rt′ = deepcopy(rt)
     function f(A)
         A = restriction_ipeps(A)
         A = build_A(A, params)
-        return real(energy(A, h, rt, oc, params))
+        return real(energy(A, h, rt, rt′, params))
     end
     function fg(x)
         e, vjp = pullback(f, x)
@@ -94,22 +89,18 @@ function optimise_ipeps(A, h, χ::Int, params::iPEPSOptimize;
     t0 = time()
     fδEi = [1.0,1.0,0]
     # _precondition(x, g) = params.ifprecondition ? precondition_invese_single_envir(x, g, rt, params, restriction_ipeps, fδEi) : g
-    function f_without_recal(A)
-        A = restriction_ipeps(A)
-        A = build_A(A, params)
-        return real(energy_without_recal(A, h, rt, oc, params))
-    end
-    _precondition(x, g) = params.ifprecondition ? precondition_invese_single_envir(x, g, rt, params, restriction_ipeps, fδEi) : g
+    _precondition(x, g) = params.ifprecondition ? precondition_invese_single_envir(x, g, rt, params, restriction_ipeps, fδEi, params.iter_precond) : g
     x, f, g, numfg, normgradhistory = optimize(fg, A, alg; 
                                                precondition=_precondition, 
                                                inner = _inner, 
-                                               finalize! = (x, f, g, iter)->_finalize!(x, f, g, iter, D, χ, params, t0, fδEi)
+                                               finalize! = (x, f, g, iter)->_finalize!(x, f, g, iter, rt, rt′, D, χ, params, t0, fδEi)
     )
     return x, f, g, numfg, normgradhistory
 end
 
 _inner(x, dx1, dx2) = real(dot(dx1, dx2))
-function _finalize!(x, f, g, iter, D, χ, params, t0, fδEi)
+function _finalize!(x, f, g, iter, rt, rt′, D, χ, params, t0, fδEi)
+    params.reuse_env && update!(rt, rt′)
     @unpack folder = params
 
     fδEi[3] = iter
@@ -119,6 +110,7 @@ function _finalize!(x, f, g, iter, D, χ, params, t0, fδEi)
 
     folder = joinpath(folder, "D$(D)_χ$(χ)")
     !(ispath(folder)) && mkpath(folder)
+    params.ifsave_env && save_rt(folder, rt)
     if params.verbosity >= 3 && iter % params.show_every == 0
         printstyled(message; bold=true, color=:red)
         flush(stdout)
@@ -128,7 +120,7 @@ function _finalize!(x, f, g, iter, D, χ, params, t0, fδEi)
         close(logfile)
     end
     if params.save_every != 0 && iter % params.save_every == 0
-        save(joinpath(folder, "ipeps", "ipeps_No.$(iter).jld2"), "bcipeps", Array.(x))
+        save(joinpath(folder, "ipeps", "ipeps_No.$(iter).jld2"), "bcipeps", Array(x))
     end
     
     return x, f, g
