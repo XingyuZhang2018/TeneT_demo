@@ -186,14 +186,14 @@ function expectation_value(h, A, env, params::iPEPSOptimize)
         params.verbosity >= 4 && println("Horizontal energy = $(e/n)")
         etol += e/n
 
-        # ir  =  mod1(i + 1, Ni)
-        # irr = mod1(Ni - i, Ni) 
-        # e = contract_o2_V(ACu[i,j], FLu[i,j], A[i,j], FRu[i,j], FLo[ir,j], A[ir,j], FRo[ir,j], conj(ACd[irr,j]), O1, O2; forloop_iter)
-        # n = contract_n2_V(ACu[i,j], FLu[i,j], A[i,j], FRu[i,j], FLo[ir,j], A[ir,j], FRo[ir,j], conj(ACd[irr,j]); forloop_iter)
-        # params.verbosity >= 4 && println("Vertical energy = $(e/n)")
-        # etol += e/n
+        ir  =  mod1(i + 1, Ni)
+        irr = mod1(Ni - i, Ni) 
+        e = contract_o2_V(ACu[i,j], FLu[i,j], A[i,j], FRu[i,j], FLo[ir,j], A[ir,j], FRo[ir,j], conj(ACd[irr,j]), O1, O2; forloop_iter)
+        n = contract_n2_V(ACu[i,j], FLu[i,j], A[i,j], FRu[i,j], FLo[ir,j], A[ir,j], FRo[ir,j], conj(ACd[irr,j]); forloop_iter)
+        params.verbosity >= 4 && println("Vertical energy = $(e/n)")
+        etol += e/n
     end
 
-    params.verbosity >= 4 && println("energy = $(etol/len*2)")
-    return etol/len*2
+    params.verbosity >= 4 && println("energy = $(etol/len)")
+    return etol/len
 end

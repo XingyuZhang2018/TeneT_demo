@@ -6,33 +6,34 @@ using OptimKit
 using LinearAlgebra
 using Zygote
 
-seed = 42
+seed = 100
 Random.seed!(seed)
 atype = CuArray
-D, χ = 4, 20
+D = 4
 pattern = [1;;]
 Ni,Nj = size(pattern)
 model = Heisenberg(Ni,Nj,-1.0,-1.0,1.0)
 h = atype.(hamiltonian(model))
-No = 69
+No = 2
 SUτ = 0.0
-ifprecondition = true
+ifprecondition = false
 if ifprecondition
     folder = "data/$model/$pattern/seed$seed/withprecondition/"
 else
     folder = "data/$model/$pattern/seed$seed/withoutprecondition/"
 end
-boundary_alg = VUMPS(ifupdown=false,
+boundary_alg = VUMPS(ifupdown=true,
                      ifdownfromup=false,
                      ifsimple_eig=true,
-                     maxiter=10, 
+                     maxiter=30, 
                      miniter=0, 
-                     maxiter_ad=30,
-                     miniter_ad=10,
+                     maxiter_ad=10,
+                     miniter_ad=3,
                      verbosity=3,
                      power_iter=5,
                      power_iter_obs=20,
                      show_every=100,
+                     ifcheckpoint=true,
                      tol=1e-10
 )
 params = GradientOptimize(pattern=pattern,
@@ -45,17 +46,18 @@ params = GradientOptimize(pattern=pattern,
                        SUτ=SUτ,
                        ifprecondition=ifprecondition,
                        ifflatten=true,
-                       iter_precond=20
+                       ifsave_env=true,
+                       iter_precond=1,
+                       tol=1e-6
 )
-A = init_ipeps(;atype, No, d=2, pattern, D, χ, params)
+A = init_ipeps(;atype, No, d=2, pattern, D, params)
 # A = TeneT_demo.init_ipeps_from_small_D(;atype, No, d=2, Ni, Nj, D,D_new=3,ϵ=1e-3, χ, params)
 
-# @show A[1] == A[1,1] A[2]==A[2,1] A[3]==A[1,2] A[4]==A[2,2]
 function _restriction_ipeps(A)
-   A += permutedims(conj(A), (1,4,3,2,5,6)) # up-down
-   A += permutedims(conj(A), (3,2,1,4,5,6)) # left-right
-   A += permutedims(conj(A), (2,1,4,3,5,6)) # diagonal
-   A += permutedims(conj(A), (4,3,2,1,5,6)) # rotation
+#    A += permutedims(conj(A), (1,4,3,2,5,6)) # up-down
+#    A += permutedims(conj(A), (3,2,1,4,5,6)) # left-right
+#    A += permutedims(conj(A), (2,1,4,3,5,6)) # diagonal
+#    A += permutedims(conj(A), (4,3,2,1,5,6)) # rotation
 
    # Ar = Zygote.Buffer(A)
    # for i in 1:length(A)
@@ -71,8 +73,18 @@ function _restriction_ipeps(A)
    # Ar = copy(Ar)
    # return Ar/norm(Ar)
    # λ = Zygote.@ignore norm(A)
-   return A
+   return A/norm(A)
 end
 
-optimise_ipeps(A, h, χ, params;
-               restriction_ipeps = _restriction_ipeps);
+fδEi = [1.0,1.0,0,1.0,1.0]
+χ1 = 51
+while χ1 <= 100
+    χ2 = χ1 + 1 
+    A, fδEi = @time optimise_ipeps(A, h, χ1, χ2, params;
+                                    restriction_ipeps = _restriction_ipeps);
+    if abs(fδEi[1] - fδEi[4]) > 1e-3
+        χ1 *= 2
+    else
+        χ1 += 1
+    end                
+end

@@ -3,9 +3,9 @@
 Initial `bcipeps` and give `key` for use of later optimization. The key include `model`, `D`, `χ`, `tol` and `maxiter`. 
 The iPEPS is random initial if there isn't any calculation before, otherwise will be load from file `/data/model_D_chi_tol_maxiter.jld2`
 """
-function init_ipeps(;atype = Array, No, pattern, D::Int, d::Int, χ::Int, params)
+function init_ipeps(;atype = Array, No, pattern, D::Int, d::Int, params)
     if No != 0
-        file = "$(params.folder)/D$(D)_χ$(χ)/ipeps/ipeps_No.$(No).jld2"
+        file = "$(params.folder)/D$(D)/ipeps/ipeps_No.$(No).jld2"
         A = load(file, "bcipeps")
         @info "load ipeps from $file"
     else
@@ -39,13 +39,13 @@ end
 
 function initialize_vumps_runtime(A, D, χ, params; restriction_ipeps)
     # Construct the expected file path
-    folder_path = joinpath(params.folder, "D$(D)_χ$(χ)")
-    file_path = joinpath(folder_path, "VUMPS_rt_env.jld2")
+    folder_path = joinpath(params.folder, "D$(D)", "VUMPS_rt_env")
+    file_path = joinpath(folder_path, "χ$χ.jld2")
 
     if params.ifload_env
         if ispath(file_path)
             try
-                return load_rt(folder_path, _arraytype(A))
+                return load_rt(folder_path, _arraytype(A); file="χ$χ.jld2")
             catch e
                 @warn "Failed to load runtime environment from $file_path: $(sprint(showerror, e)). Creating new environment."
                 return create_new_runtime(A, χ, params; restriction_ipeps)

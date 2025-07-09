@@ -38,27 +38,52 @@ function precondition_invese_single_envir(A, grad, rt, params, restriction_ipeps
     return gradnew
 end
 
-function hessian_vec_prod(f, V, v)
-    return ForwardDiff.derivative(t -> Zygote.gradient(f, V + t * v)[1], 0.0)
-end
-
-function precondition_invese_hessian(f, A, grad, fδEi)
-    size(A) == (1, ) || throw(Base.error("precondition only supports 1x1 unit cell currently"))
-    # if fδEi[2] > 0.01 || fδEi[3] <= 10
+function precondition_invese_hessian(A, grad, rt, rt′, params, restriction_ipeps, fδEi, iter_precond)
+    # size(A) == (1, ) || throw(Base.error("precondition only supports 1x1 unit cell currently"))
+    # if fδEi[2] > 0.01 || fδEi[3] <= iter_precond
     #     return grad
     # end
 
-    δ = 1e-8
-    @show δ
-    gradnew, info = linsolve(v->v*δ + hessian_vec_prod(f, A, v), grad; isposdef = true, maxiter=1)
-    @show info
-    return gradnew
-end
+    δ = fδEi[2]
 
-function Base.Float64(x::ForwardDiff.Dual) 
-    # @show dump(x)
-    return x.value
-    # return x
+    function contract_n1(FLo, ACu, A, Ap, ACd, FRo; forloop_iter)
+        D1,D2,D3,D4,_ = size(A)
+        M = reshape(ein"abcde,fghme->afbgchdm"(A, Ap), D1^2,D2^2,D3^2,D4^2)
+        return sum(oc1_leg3(FLo, ACu, M, ACd, FRo; forloop_iter))
+    end
+    
+    function build_M(A, Ap, params)
+        D = size(A[1], 1)
+        len = length(unique(params.pattern))
+        if params.ifflatten
+            return StructArray([reshape(ein"abcde,fghme->afbgchdm"(A[i], Ap[i]), D^2,D^2,D^2,D^2) for i in 1:len], params.pattern)
+        else
+            throw(Base.error("precondition only supports ifflatten=true currently"))
+        end
+    end
+
+    function ipeps_norm(A, Ap, rt, rt′, params::iPEPSOptimize)
+        M = build_M(A, Ap, params)
+        rt, _ = leading_boundary(rt, M, params.boundary_alg)
+        Zygote.@ignore update!(rt′, rt)
+        env = VUMPSEnv(rt, M, params.boundary_alg)
+        @unpack ACu, ACd, FLo, FRo = env
+        n = contract_n1(FLo[1], ACu[1], A[1], Ap[1], conj(ACd[1]), FRo[1]; params.forloop_iter)
+        return real(n)
+    end
+
+    function f(A, Ap)
+        A = restriction_ipeps(A)
+        A = build_A(A, params)
+        Ap = restriction_ipeps(Ap)
+        Ap = build_A(Ap, params)
+        return ipeps_norm(A, Ap, rt, rt′, params)
+    end
+
+    @show gradient(x2 -> dot(grad, gradient(x1 -> f(x1, x2), A)[1]), conj(A))[1] 
+    # gradnew, info = linsolve(v->v*δ + hessian_vec_prod(f, A, v), grad; isposdef = true, maxiter=1)
+    # @show info
+    # return gradnew
 end
 
 function precondition_invese_BP_envir(A, grad, rt, params, restriction_ipeps, fδEi)

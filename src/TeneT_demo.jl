@@ -12,6 +12,7 @@ using Parameters
 using ForwardDiff
 using Zygote
 using TeneT
+using CUDA
 
 using TeneT: ALCtoAC, _arraytype, update!, mcform, rightenv, rightCenv
 using TeneT: leg3, leg4
