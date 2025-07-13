@@ -9,12 +9,12 @@ using Zygote
 seed = 100
 Random.seed!(seed)
 atype = CuArray
-D = 4
+D = 3
 pattern = [1;;]
 Ni,Nj = size(pattern)
 model = Heisenberg(Ni,Nj,-1.0,-1.0,1.0)
 h = atype.(hamiltonian(model))
-No = 2
+No = 0
 SUτ = 0.0
 ifprecondition = false
 if ifprecondition
@@ -25,13 +25,13 @@ end
 boundary_alg = VUMPS(ifupdown=true,
                      ifdownfromup=false,
                      ifsimple_eig=true,
-                     maxiter=30, 
+                     maxiter=300, 
                      miniter=0, 
                      maxiter_ad=10,
                      miniter_ad=3,
                      verbosity=3,
                      power_iter=5,
-                     power_iter_obs=20,
+                     power_iter_obs=40,
                      show_every=100,
                      ifcheckpoint=true,
                      tol=1e-10
@@ -39,7 +39,7 @@ boundary_alg = VUMPS(ifupdown=true,
 params = GradientOptimize(pattern=pattern,
                        boundary_alg=boundary_alg, 
                     #    optimizer=GradientDescent(),
-                       optimizer=LBFGS(200; maxiter=100, verbosity=1, gradtol=1e-7),
+                       optimizer=LBFGS(20; maxiter=1000, verbosity=1, gradtol=1e-7),
                        reuse_env=true, 
                        verbosity=4, 
                        folder=folder,
@@ -76,15 +76,17 @@ function _restriction_ipeps(A)
    return A/norm(A)
 end
 
-fδEi = [1.0,1.0,0,1.0,1.0]
-χ1 = 51
-while χ1 <= 100
-    χ2 = χ1 + 1 
-    A, fδEi = @time optimise_ipeps(A, h, χ1, χ2, params;
-                                    restriction_ipeps = _restriction_ipeps);
-    if abs(fδEi[1] - fδEi[4]) > 1e-3
-        χ1 *= 2
-    else
-        χ1 += 1
-    end                
-end
+# fδEi = [1.0,1.0,0,1.0,1.0]
+# χ1 = 1
+# while χ1 <= 100
+#     χ2 = χ1 + 1 
+#     A, fδEi = @time optimise_ipeps(A, h, χ1, χ2, params;
+#                                     restriction_ipeps = _restriction_ipeps);
+#     if abs(fδEi[1] - fδEi[4]) > 1e-3
+#         χ1 *= 2
+#     else
+#         χ1 += 1
+#     end                
+# end
+optimise_ipeps(A, h, 1, 2, params;
+                restriction_ipeps = _restriction_ipeps);

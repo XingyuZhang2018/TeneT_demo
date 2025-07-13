@@ -37,7 +37,7 @@ function init_ipeps_from_small_D(;atype = Array, No, Ni::Int, Nj::Int, D::Int, D
     return atype(A)
 end
 
-function initialize_vumps_runtime(A, D, χ, params; restriction_ipeps)
+function initialize_vumps_runtime(A, D, χ, params)
     # Construct the expected file path
     folder_path = joinpath(params.folder, "D$(D)", "VUMPS_rt_env")
     file_path = joinpath(folder_path, "χ$χ.jld2")
@@ -45,23 +45,21 @@ function initialize_vumps_runtime(A, D, χ, params; restriction_ipeps)
     if params.ifload_env
         if ispath(file_path)
             try
-                return load_rt(folder_path, _arraytype(A); file="χ$χ.jld2")
+                return load_rt(folder_path, _arraytype(A[1]); file="χ$χ.jld2")
             catch e
                 @warn "Failed to load runtime environment from $file_path: $(sprint(showerror, e)). Creating new environment."
-                return create_new_runtime(A, χ, params; restriction_ipeps)
+                return create_new_runtime(A, χ, params)
             end
         else
             @warn "File $file_path does not exist. Creating new VUMPS runtime environment."
-            return create_new_runtime(A, χ, params; restriction_ipeps)
+            return create_new_runtime(A, χ, params)
         end
     else
-        return create_new_runtime(A, χ, params; restriction_ipeps)
+        return create_new_runtime(A, χ, params)
     end
 end
 
-function create_new_runtime(A, χ, params; restriction_ipeps)
-    A = restriction_ipeps(A)
-    A = build_A(A, params)
+function create_new_runtime(A, χ, params)
     M = build_M(A, params)
     return VUMPSRuntime(M, χ, params.boundary_alg)
 end
