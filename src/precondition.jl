@@ -21,17 +21,19 @@ function precondition_invese_single_envir(A, grad, rt, params, restriction_ipeps
 
     gradnew = deepcopy(grad)
     Ni = size(M)[1]
+    forloop_iter = params.forloop_iter
+    ifparallel = params.boundary_alg.ifparallel
     for p in 1:length(M)
         i, j = Tuple(findfirst(==(p), M.pattern))
         ir = Ni + 1 - i
-        n = contract_n1(FLo[i,j], ACu[i,j], A[i,j], conj(ACd[ir,j]), FRo[i,j]; params.forloop_iter)
+        n = contract_n1(FLo[i,j], ACu[i,j], A[i,j], conj(ACd[ir,j]), FRo[i,j]; ifparallel, forloop_iter)
         # P = ein"((iaej,jbfk),lcgk),idhl->abcdefgh"(re(FLo[i,j]),re(conj(ACd[ir,j])),re(FRo[i,j]),re(ACu[i,j]))/n
         # λ,_ = eigen(reshape(P,D^4,D^4))
         # @show real(λ[end-10:end])
         if params.ifflatten
-            gradnew[:,:,:,:,:,p], _ = linsolve(x->δ * x + ein"(((iaej,jbfk),abcdp),lcgk),idhl->efghp"(re(FLo[i,j]),re(conj(ACd[ir,j])),x,re(FRo[i,j]),re(ACu[i,j]))/n, grad[:,:,:,:,:,p]; isposdef = true, maxiter=1)
+            gradnew[:,:,:,:,:,p], _ = linsolve(x->δ * x + TeneT.Mumap_parallel(re(ACu[i,j]),re(conj(ACd[ir,j])),re(FLo[i,j]),re(FRo[i,j]),x; ifparallel, forloop_iter)/n, grad[:,:,:,:,:,p]; isposdef = true, maxiter=1, verbosity=0)
         else
-            gradnew[:,:,:,:,:,p], _ = linsolve(x->δ * x + ein"(((iaej,jbfk),abcdp),lcgk),idhl->efghp"(FLo[i,j],conj(ACd[ir,j]),x,FRo[i,j],ACu[i,j])/n, grad[:,:,:,:,:,p]; isposdef = true, maxiter=1)
+            gradnew[:,:,:,:,:,p], _ = linsolve(x->δ * x + + TeneT.Mumap_parallel(ACu[i,j],conj(ACd[ir,j]),FLo[i,j],FRo[i,j],x; ifparallel, forloop_iter)/n, grad[:,:,:,:,:,p]; isposdef = true, maxiter=1, verbosity=0)
         end
     end
 
@@ -80,10 +82,12 @@ function precondition_invese_hessian(A, grad, rt, rt′, params, restriction_ipe
         return ipeps_norm(A, Ap, rt, rt′, params)
     end
 
-    @show gradient(x2 -> dot(grad, gradient(x1 -> f(x1, x2), A)[1]), conj(A))[1] 
+    @show dot(grad, Zygote.gradient(x1 -> f(x1, conj(A)), A)[1])
+    @show ForwardDiff.derivative(t -> f(t * A, conj(A)), 0)[1]
+    # @show ForwardDiff.gradient(x2 -> dot(grad, Zygote.gradient(x1 -> f(x1, x2), A)[1]), conj(A))[1] 
     # gradnew, info = linsolve(v->v*δ + hessian_vec_prod(f, A, v), grad; isposdef = true, maxiter=1)
     # @show info
-    # return gradnew
+    return grad
 end
 
 function precondition_invese_BP_envir(A, grad, rt, params, restriction_ipeps, fδEi)

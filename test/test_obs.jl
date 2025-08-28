@@ -25,9 +25,9 @@ boundary_alg = VUMPS(ifupdown=true,
                      ifsimple_eig=true,
                      ifparallel=false,
                      ifcheckpoint=false,
-                     maxiter=10, 
+                     maxiter=100, 
                      miniter=1, 
-                     maxiter_ad=3,
+                     maxiter_ad=10,
                      miniter_ad=3,
                      power_iter=5,
                      power_iter_obs=40,
@@ -78,5 +78,4 @@ function _restriction_ipeps(A)
    return A
 end
 
-optimise_ipeps(A, χ, params;
-               restriction_ipeps = _restriction_ipeps);
+TeneT_demo.observable(A, χ, params; restriction_ipeps=_restriction_ipeps)

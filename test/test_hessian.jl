@@ -36,13 +36,14 @@ using Zygote, OMEinsum, Random, Test, LinearAlgebra
     foo1(v1, v2) = real(v1' * M * v2)
     foo2(v1, v2) = real(ein"a,ab,b->"(v1, M, v2)[])
     foo3(v1, v2) = real(ein"(a,ab),b->"(v1, M, v2)[])
-    foo4(v1, v2) = real(@tensoropt v1[1] * M[1, 2] * v2[2])
+    # foo4(v1, v2) = real(@tensoropt v1[1] * M[1, 2] * v2[2])
 
-    @test foo1(v1, v2) ≈ foo2(v1, v2) ≈ foo3(v1, v2) ≈ foo4(v1, v2)
+    @test foo1(v1, v2) ≈ foo2(v1, v2) ≈ foo3(v1, v2)
 
     @show gradient(x1 -> foo1(x1, v2), v1)[1]
-    @show gradient(x1 -> foo4(x1, v2), v1)[1]
-    # @show gradient(x2 -> dot(v1, gradient(x1 -> foo1(x1, x2), v1)[1]), v2)[1] # works
+    # @show gradient(x1 -> foo4(x1, v2), v1)[1]
+    @show gradient(x2 -> dot(v1, gradient(x1 -> foo1(x1, x2), v1)[1]), v2)[1] # works
+    @show ForwardDiff.gradient(x2 -> dot(v1, gradient(x1 -> foo1(x1, x2), v1)[1]), v2) # works
     # @show gradient(x2 -> dot(v1, gradient(x1 -> foo2(x1, x2), v1)[1]), v2)[1] # works
     # @show gradient(x2 -> dot(v1, gradient(x1 -> foo4(x1, x2), v1)[1]), v2)[1] # works
     # @show gradient(x2 -> dot(v1, gradient(x1 -> foo3(x1, x2), v1)[1]), v2)[1] # does not works

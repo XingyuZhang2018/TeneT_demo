@@ -28,13 +28,19 @@ function init_ipeps(;atype = Array, No, pattern, D::Int, d::Int, params)
     return atype(A)
 end
 
-function init_ipeps_from_small_D(;atype = Array, No, Ni::Int, Nj::Int, D::Int, D_new::Int, d::Int, χ::Int, ϵ::Real, params::iPEPSOptimize)
-    file = "$(params.folder)/D$(D)_χ$(χ)/ipeps/ipeps_No.$(No).jld2"
-    Aold = load(file, "bcipeps")
-    println("load ipeps from $file")
-    A = rand(ComplexF64, D_new, D_new, D_new, D_new, d, Ni, Nj) * ϵ
-    A[1:D, 1:D, 1:D, 1:D, :, :, :] = Aold
-    return atype(A)
+function init_ipeps_to_D(;atype = Array, No, D::Int, D_new::Int, params::iPEPSOptimize)
+    file = "$(params.folder)/D$(D)/ipeps/ipeps_No.$(No).jld2"
+    A = load(file, "bcipeps")
+    D, d = size(A)[[1,5]]
+    params.verbosity >= 2 && @info "load ipeps from $file"
+    A = build_A(A, params)
+    A = SU_parameterization(A, params; D_new)
+    A_new = rand(ComplexF64, D_new,D_new,D_new,D_new,d, length(unique(params.pattern)))
+    for i in 1:length(unique(params.pattern))
+        A_new[:,:,:,:,:,i] = A[i][1:D_new,1:D_new,1:D_new,1:D_new,:]
+    end
+    params.verbosity >= 2 && @info "truncated size of A: $(size(A_new))"
+    return atype(A_new)
 end
 
 function initialize_vumps_runtime(A, D, χ, params; restriction_ipeps)

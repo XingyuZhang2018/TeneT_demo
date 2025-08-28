@@ -1,21 +1,26 @@
 @kwdef mutable struct GradientOptimize <: iPEPSOptimize
+    model::HamiltonianModel
     pattern::Matrix{Int}
     boundary_alg::VUMPS
-    reuse_env::Bool = Defaults.reuse_env
-    verbosity::Int = Defaults.verbosity
-    maxiter::Int = Defaults.fpgrad_maxiter
-    tol::Real = Defaults.fpgrad_tol
-    SUτ::Real = Defaults.SUτ
-    optimizer = Defaults.optimizer
-    folder::String = Defaults.folder
-    show_every::Int = Defaults.show_every
-    save_every::Int = Defaults.save_every
-    ifsave_env::Bool = Defaults.ifsave_env
-    ifload_env::Bool = Defaults.ifload_env
-    ifprecondition::Bool = Defaults.ifprecondition
-    ifflatten::Bool = Defaults.ifflatten
-    forloop_iter::Int = Defaults.forloop_iter
-    iter_precond::Int = Defaults.iter_precond
+    reuse_env::Bool = true
+    verbosity::Int = VERBOSE_ITER
+    maxiter::Int = 100
+    SUτ::Real = 0.0
+    ifSU::Bool = false
+    optimizer = LBFGS(; verbosity = 0)
+    folder::String = joinpath(pwd(), "data", "ipeps")
+    show_every::Int = 1
+    save_every::Int = 1
+    ifsave_env::Bool = true
+    save_env_tol::Real = 1e-4
+    ifload_env::Bool = true
+    ifflatten::Bool = false
+    forloop_iter::Int = 1
+    ifprecondition::Bool = false
+    iter_precond::Int = 20
+
+    ifsave_lbfgs::Bool = true
+    ifload_lbfgs::Bool = true
 end
 
 """
@@ -39,7 +44,7 @@ end
 return the energy of the `bcipeps` 2-site hamiltonian `h` and calculated via a
 BCVUMPS with parameters `χ`, `tol` and `maxiter`.
 """
-function energy(A, h, rt, rt′, params::iPEPSOptimize)
+function energy(A, rt, rt′, params::iPEPSOptimize)
     M = build_M(A, params)
     # n = 1
     # Zygote.@ignore begin
@@ -58,7 +63,7 @@ function energy(A, h, rt, rt′, params::iPEPSOptimize)
     rt, _ = leading_boundary(rt, M, params.boundary_alg)
     Zygote.@ignore update!(rt′, rt)
     env = VUMPSEnv(rt, M, params.boundary_alg)
-    return expectation_value(h, A, env, params)
+    return expectation_value(A, env, params)
 end
 
 
@@ -71,68 +76,63 @@ two-site hamiltonian `h`. The minimization is done using `Optim` with default-me
 providing `optimmethod`. Other options to optim can be passed with `optimargs`.
 The energy is calculated using vumps with key include parameters `χ`, `tol` and `maxiter`.
 """
-function optimise_ipeps(A, h, χ1::Int, χ2::Int, params::iPEPSOptimize;
+function optimise_ipeps(A, χ::Int, params::iPEPSOptimize;
                         restriction_ipeps = _restriction_ipeps)
     D = size(A, 1)
-    rt1 = initialize_vumps_runtime(A, D, χ1, params; restriction_ipeps)
-    rt1′ = deepcopy(rt1)
-    rt2 = initialize_vumps_runtime(A, D, χ2, params; restriction_ipeps)
+    rt = initialize_vumps_runtime(A, D, χ, params; restriction_ipeps)
+    rt′ = deepcopy(rt)
+
     function f(A)
         A = restriction_ipeps(A)
         A = build_A(A, params)
-        return real(energy(A, h, rt1, rt1′, params))
+        return real(energy(A, rt, rt′, params))
     end
     function fg(x)
+        t1 = time()
         e, vjp = pullback(f, x)
+        params.verbosity >= 2 && printstyled(" forward calculation took $(round(time() - t1, digits = 2)) s\n"; bold=true, color=:green) 
+        # TeneT.reclaim(x)
+        t2 = time()
         g = vjp(1)[1]
-        if CUDA.available_memory() / CUDA.total_memory() < 0.1
-            GC.gc(true)
-            CUDA.reclaim()
-        end
+        params.verbosity >= 2 && printstyled("backward calculation took $(round(time() - t2, digits = 2)) s\n"; bold=true, color=:green)
+        # TeneT.reclaim(g)
         return e, g
     end
     alg = params.optimizer
     t0 = time()
-    fδEi = [1.0,1.0,0,1.0,1.0]
-    # _precondition(x, g) = params.ifprecondition ? precondition_invese_single_envir(x, g, rt, params, restriction_ipeps, fδEi) : g
-    _precondition(x, g) = params.ifprecondition ? precondition_invese_single_envir(x, g, rt1, params, restriction_ipeps, fδEi, params.iter_precond) : g
+    fδEi = [1.0,1.0,0]
+    _precondition(x, g) = params.ifprecondition ? precondition_invese_single_envir(x, g, rt, params, restriction_ipeps, fδEi, params.iter_precond) : g
+    
+    state_path = joinpath(params.folder, "D$(D)", "lbfgs_checkpoint.jld2")
+    resume_from = params.ifload_lbfgs ? state_path : nothing
+    save_state_to = params.ifsave_lbfgs ? state_path : nothing
     # _precondition(x, g) = precondition_invese_hessian(x, g, rt, rt′, params, restriction_ipeps, fδEi, params.iter_precond)
-    x, f, g, numfg, normgradhistory = optimize(fg, A, alg; 
-                                               precondition=_precondition, 
-                                               inner = _inner, 
-                                               finalize! = (x, f, g, iter)->_finalize!(x, f, g, iter, rt1, rt1′, rt2, h, D, χ1, χ2, params, t0, fδEi; restriction_ipeps)
+    x, f, g, numfg, normgradhistory = optimize_reload(fg, A, alg; 
+                                                      resume_from,
+                                                      save_state_to,
+                                                      save_every=params.save_every,
+                                                      precondition=_precondition, 
+                                                      inner = _inner, 
+                                                      finalize! = (x, f, g, iter)->_finalize!(x, f, g, iter, rt, rt′, D, χ, params, t0, fδEi)
     )
     return x, fδEi
 end
 
 _inner(x, dx1, dx2) = real(dot(dx1, dx2))
-function _finalize!(x, f, g, iter, rt1, rt1′, rt2, h, D, χ1, χ2, params, t0, fδEi; restriction_ipeps)
-    params.reuse_env && update!(rt1, rt1′)
+function _finalize!(x, f, g, iter, rt, rt′, D, χ, params, t0, fδEi)
     @unpack folder = params
 
     fδEi[3] = iter
     fδEi[2] = abs(fδEi[1] - f)
     fδEi[1] = f
-    if χ1 < χ2
-        x′ = restriction_ipeps(x)
-        x′ = build_A(x′, params)
-        e2 = real(energy(x′, h, rt2, rt2, params))
-    else
-        e2 = f
-    end
-    fδEi[5] = e2 - fδEi[4]
-    fδEi[4] = e2
-    message = @sprintf("i = %5d\tt = %0.2f sec\te_χ%d = %.15f\te_χ%d = %.15f\tgnorm = %.3e\n", iter, time() - t0, χ1, f, χ2, e2, norm(g))
-    if fδEi[5] > params.tol || fδEi[2] ≈ 0 || abs(f-e2) > params.tol
-        g = zero(g)
-    end
+    message = @sprintf("i = %5d\tt = %0.2f sec\te_χ%d = %.15f\tgnorm = %.3e\n", iter, time() - t0, χ, f, norm(g))
 
     folder0 = joinpath(folder, "D$(D)")
     !(ispath(folder0)) && mkpath(folder0)
     folder1 = joinpath(folder, "D$(D)", "VUMPS_rt_env")
     !(ispath(folder1)) && mkpath(folder1)
-    params.ifsave_env && save_rt(folder1, rt1; file="χ$(χ1).jld2")
-    params.ifsave_env && save_rt(folder1, rt2; file="χ$(χ2).jld2")
+    params.reuse_env && update!(rt, rt′)
+    params.ifsave_env && save_rt(folder1, rt; file="χ$(χ).jld2")
     if params.verbosity >= 3 && iter % params.show_every == 0
         printstyled(message; bold=true, color=:red)
         flush(stdout)
@@ -147,3 +147,11 @@ function _finalize!(x, f, g, iter, rt1, rt1′, rt2, h, D, χ1, χ2, params, t0,
     
     return x, f, g
 end 
+
+function Z(M,rt,alg)
+    @unpack AL, AR, C, FL, FR = rt
+    AC = TeneT.ALCtoAC(AL, C)
+    λAC, = TeneT.ACenv(AC, FL, M, FR; ifvalue=true, alg)
+    λC,  = TeneT.Cenv( C, FL, FR; ifvalue=true, alg)
+    return real(λAC[1]/λC[1])
+end
