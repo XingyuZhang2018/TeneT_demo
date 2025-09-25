@@ -1,7 +1,7 @@
 function build_A(A, params)
     Ar = StructArray([A[:,:,:,:,:,i] for i in 1:length(unique(params.pattern))], params.pattern)
     if params.ifSU
-        return SU_parameterization(Ar, params)
+        return SU_parameterization(Ar, params; D_new=size(Ar[1],1))
     else
         return Ar
     end

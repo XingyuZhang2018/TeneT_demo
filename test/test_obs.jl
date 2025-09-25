@@ -9,18 +9,18 @@ using LinearAlgebra
 seed = 100
 Random.seed!(seed)
 atype = CuArray
-D, χ = 3, 128
-pattern = [1 2; 2 1]
-model = Heisenberg(1.0,1.0,1.0)
-No = 167
+D, χ = 3, 50
+pattern = [1;;]
+model = Heisenberg(-1.0,-1.0,1.0)
+No = 127
 SUτ = 0.0
 ifprecondition = true
 if ifprecondition
-    folder = joinpath(pkgdir(TeneT_demo), "../data/$model/$pattern/seed$seed/withprecondition/")
+    folder = joinpath(pkgdir(TeneT_demo), "../data/$model/$pattern/seed$seed/withprecondition/test3/")
 else
     folder = joinpath(pkgdir(TeneT_demo), "../data/$model/$pattern/seed$seed/withoutprecondition/")
 end
-boundary_alg = VUMPS(ifupdown=true,
+boundary_alg = VUMPS(ifupdown=false,
                      ifdownfromup=false,
                      ifsimple_eig=true,
                      ifparallel=false,
@@ -47,19 +47,19 @@ params = GradientOptimize(model=model,
                           ifprecondition=ifprecondition,
                           iter_precond=10,
                           reuse_env=true, 
-                          ifflatten=true,
+                          ifflatten=false,
                           ifsave_env=true,
                           ifsave_lbfgs=true,
                           ifload_lbfgs=false
 )
-# A = init_ipeps(;atype, No, d=2, pattern, D, params)
-A = TeneT_demo.init_ipeps_to_D(;atype, No, D, D_new=4, params)
+A = init_ipeps(;atype, No, d=2, pattern, D, params)
+# A = TeneT_demo.init_ipeps_to_D(;atype, No, D, D_new=4, params)
 
 function _restriction_ipeps(A)
-#    A += permutedims(conj(A), (1,4,3,2,5,6)) # up-down
-#    A += permutedims(conj(A), (3,2,1,4,5,6)) # left-right
-#    A += permutedims(conj(A), (2,1,4,3,5,6)) # diagonal
-#    A += permutedims(conj(A), (4,3,2,1,5,6)) # rotation
+   A += permutedims(conj(A), (1,4,3,2,5,6)) # up-down
+   A += permutedims(conj(A), (3,2,1,4,5,6)) # left-right
+   A += permutedims(conj(A), (2,1,4,3,5,6)) # diagonal
+   A += permutedims(conj(A), (4,3,2,1,5,6)) # rotation
 
    # Ar = Zygote.Buffer(A)
    # for i in 1:length(A)

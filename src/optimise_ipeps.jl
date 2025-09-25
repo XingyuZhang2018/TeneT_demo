@@ -16,6 +16,7 @@
     ifload_env::Bool = true
     ifflatten::Bool = false
     forloop_iter::Int = 1
+    ifcheckpoint::Bool = false
     ifprecondition::Bool = false
     iter_precond::Int = 20
 
@@ -45,6 +46,7 @@ return the energy of the `bcipeps` 2-site hamiltonian `h` and calculated via a
 BCVUMPS with parameters `χ`, `tol` and `maxiter`.
 """
 function energy(A, rt, rt′, params::iPEPSOptimize)
+    A = build_A(A, params)
     M = build_M(A, params)
     # n = 1
     # Zygote.@ignore begin
@@ -63,7 +65,7 @@ function energy(A, rt, rt′, params::iPEPSOptimize)
     rt, _ = leading_boundary(rt, M, params.boundary_alg)
     Zygote.@ignore update!(rt′, rt)
     env = VUMPSEnv(rt, M, params.boundary_alg)
-    return expectation_value(A, env, params)
+    return params.ifcheckpoint ? checkpoint(expectation_value, A, env, params) : expectation_value(A, env, params)
 end
 
 
@@ -84,18 +86,17 @@ function optimise_ipeps(A, χ::Int, params::iPEPSOptimize;
 
     function f(A)
         A = restriction_ipeps(A)
-        A = build_A(A, params)
         return real(energy(A, rt, rt′, params))
     end
     function fg(x)
         t1 = time()
         e, vjp = pullback(f, x)
         params.verbosity >= 2 && printstyled(" forward calculation took $(round(time() - t1, digits = 2)) s\n"; bold=true, color=:green) 
-        # TeneT.reclaim(x)
+        TeneT.reclaim(x)
         t2 = time()
         g = vjp(1)[1]
         params.verbosity >= 2 && printstyled("backward calculation took $(round(time() - t2, digits = 2)) s\n"; bold=true, color=:green)
-        # TeneT.reclaim(g)
+        TeneT.reclaim(g)
         return e, g
     end
     alg = params.optimizer

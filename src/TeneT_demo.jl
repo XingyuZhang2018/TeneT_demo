@@ -16,7 +16,8 @@ using CUDA
 
 using TeneT: ALCtoAC, _arraytype, update!, mcform, rightenv, rightCenv
 using TeneT: leg3, leg4
-using TeneT: FLmap_parallel, FRmap_parallel, ACmap_parallel
+using TeneT: FLmap_forloop, FRmap_forloop, ACmap_forloop
+using TeneT: checkpoint
 
 import Base: Array
 import CUDA: CuArray
@@ -28,6 +29,7 @@ export SUOptimize, FUOptimize, GradientOptimize, init_ipeps, optimise_ipeps, ene
 abstract type iPEPSOptimize end
 
 include("defaults.jl")
+include("untils.jl")
 include("hamiltonian_models.jl")
 include("precondition.jl")
 include("optimise_patch.jl")

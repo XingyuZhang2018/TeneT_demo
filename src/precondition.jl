@@ -1,6 +1,6 @@
 function precondition_invese_single_envir(A, grad, rt, params, restriction_ipeps, fδEi, iter_precond)
     # size(A) == (1,) || throw(Base.error("precondition only supports 1x1 unit cell currently"))
-    if fδEi[2] > 0.01 || fδEi[3] <= iter_precond
+    if fδEi[3] <= iter_precond
         return grad
     end
     δ = fδEi[2]
@@ -15,25 +15,27 @@ function precondition_invese_single_envir(A, grad, rt, params, restriction_ipeps
     env = VUMPSEnv(rt, M, params.boundary_alg)
     @unpack ACu, ARu, ACd, ARd, FLu, FRu, FLo, FRo = env
 
-    χ,D = size(ACu[1])[[1,2]]
-    D = Int(sqrt(D))
-    re(x) = reshape(x, χ, D, D, χ)
+    function re(x)
+        χ,D = size(ACu[1])[[1,2]]
+        D = Int(sqrt(D))
+        reshape(x, χ, D, D, χ)
+    end
 
     gradnew = deepcopy(grad)
     Ni = size(M)[1]
     forloop_iter = params.forloop_iter
-    ifparallel = params.boundary_alg.ifparallel
     for p in 1:length(M)
         i, j = Tuple(findfirst(==(p), M.pattern))
         ir = Ni + 1 - i
-        n = contract_n1(FLo[i,j], ACu[i,j], A[i,j], conj(ACd[ir,j]), FRo[i,j]; ifparallel, forloop_iter)
+        # n = contract_n1(FLo[i,j], ACu[i,j], A[i,j], conj(ACd[ir,j]), FRo[i,j]; forloop_iter)
+        # @show n
         # P = ein"((iaej,jbfk),lcgk),idhl->abcdefgh"(re(FLo[i,j]),re(conj(ACd[ir,j])),re(FRo[i,j]),re(ACu[i,j]))/n
         # λ,_ = eigen(reshape(P,D^4,D^4))
         # @show real(λ[end-10:end])
         if params.ifflatten
-            gradnew[:,:,:,:,:,p], _ = linsolve(x->δ * x + TeneT.Mumap_parallel(re(ACu[i,j]),re(conj(ACd[ir,j])),re(FLo[i,j]),re(FRo[i,j]),x; ifparallel, forloop_iter)/n, grad[:,:,:,:,:,p]; isposdef = true, maxiter=1, verbosity=0)
+            gradnew[:,:,:,:,:,p], _ = linsolve(x->δ * x + TeneT.Mumap_forloop(re(ACu[i,j]),re(conj(ACd[ir,j])),re(FLo[i,j]),re(FRo[i,j]),x;forloop_iter), grad[:,:,:,:,:,p]; isposdef = true, maxiter=1, verbosity=0)
         else
-            gradnew[:,:,:,:,:,p], _ = linsolve(x->δ * x + + TeneT.Mumap_parallel(ACu[i,j],conj(ACd[ir,j]),FLo[i,j],FRo[i,j],x; ifparallel, forloop_iter)/n, grad[:,:,:,:,:,p]; isposdef = true, maxiter=1, verbosity=0)
+            gradnew[:,:,:,:,:,p], _ = linsolve(x->δ * x + TeneT.Mumap_forloop(ACu[i,j],conj(ACd[ir,j]),FLo[i,j],FRo[i,j],x;forloop_iter), grad[:,:,:,:,:,p]; isposdef = true, maxiter=1, verbosity=0)
         end
     end
 
