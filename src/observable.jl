@@ -169,11 +169,99 @@ function contract_o1(FLo::leg4, ACu, A, ACd, FRo, O; forloop_iter)
     return oc1_leg4(FLo, ACu, ein"abcde,ef->abcdf"(A, O), conj(A), ACd, FRo; forloop_iter)
 end
 
-function expectation_value(A, env, params::iPEPSOptimize)
+
+"""
+    next near neighbour contraction for 2 site
+```
+                       
+a ────┬──c     c──┬──── a                                 
+│     bl          bl    │                                 
+├─ dm─┼─ eo    eo─┼─dm ─┤                                   
+f     gn          hq    i 
+
+f     gn          hq    i 
+├─ dm─┼─ jr   jr ─┼─dm ─┤
+│     bl          bl    │
+a ────┴──k     k──┴──── a
+```
+
+"""
+oc_ul(FLu::leg4, ACu, Au11, Ad11) = ein"((admf,ablc),dgebp),mnolp->fgnceo"(FLu, ACu, Au11, Ad11)
+oc_ur(ARu::leg4, FRu, Au12, Ad12) = ein"((cbla,admi),ehdbp),oqmlp->ceohqi"(ARu, FRu, Au12, Ad12)
+oc_dl(FLo::leg4, ACd, Au21, Ad21) = ein"((fdma,ablk),dbjgp),mlrnp->fgnjrk"(FLo, ACd, Au21, Ad21)
+oc_dr(FRo::leg4, ARd, Au22, Ad22) = ein"((idma,kbla),jbdhp),rlmqp->hqijrk"(FRo, ARd, Au22, Ad22)
+const leg6 = Union{<:AbstractArray{T, 6}, StructArray{<:Vector{<:AbstractArray{T, 6}}}} where T
+oc_4_corner(ul::leg6,ur,dl,dr) = sum(ein"((fgnceo,ceohqi),fgnjrk),hqijrk->"(ul,ur,dl,dr))
+
+function oc_D_leg4(FLu, FLo, ACu, ACd, FRu, FRo, ARu, ARd, Au11, Ad11, Au12, Ad12, Au21, Ad21, Au22, Ad22; forloop_iter)
+    if forloop_iter == 1
+        ul = oc_ul(FLu, ACu, Au11, Ad11)
+        ur = oc_ur(ARu, FRu, Au12, Ad12)
+        dl = oc_dl(FLo, ACd, Au21, Ad21)
+        dr = oc_dr(FRo, ARd, Au22, Ad22)
+        return oc_4_corner(ul,ur,dl,dr)
+    else
+        χ = size(FLu, 1)
+        χ_loop = cld(χ, forloop_iter)
+        χ_ranges = [range(1 + (i-1)*χ_loop, min(i*χ_loop, χ)) for i in 1:forloop_iter]
+        cols = fill(:,ndims(FLu)-1)
+        s = 0
+        for range1 in χ_ranges, range2 in χ_ranges
+            ul = oc_ul(FLu[cols..., range1], ACu, Au11, Ad11)
+            ur = oc_ur(ARu, FRu[cols..., range2], Au12, Ad12)
+            dl = oc_dl(FLo[range1, cols...], ACd, Au21, Ad21)
+            dr = oc_dr(FRo[range2, cols...], ARd, Au22, Ad22)
+            s += oc_4_corner(ul,ur,dl,dr)
+        end
+        return s
+    end
+end
+
+function contract_n_D(FLu::leg4, FLo, ACu, ACd, FRu, FRo, ARu, ARd, A11, A12, A21, A22; forloop_iter)
+    return oc_D_leg4(FLu, FLo, ACu, ACd, FRu, FRo, ARu, ARd, A11, conj(A11), A12, conj(A12), A21, conj(A21), A22, conj(A22); forloop_iter)
+end
+
+function contract_o_D1(FLu::leg4, FLo, ACu, ACd, FRu, FRo, ARu, ARd, A11, A12, A21, A22, O1, O2; forloop_iter)
+    Dh = size(O1, 3)
+    atype = _arraytype(O1)
+    IDh = Zygote.@ignore atype(Matrix{ComplexF64}(I, Dh, Dh))
+    D1,D2,D3,D4,d = size(A11)
+    Au11 = reshape(ein"abcde,eni->abcidn"(A11, O1), D1,D2,D3*Dh,D4,d)
+    Ad11 = conj(A11)
+    D1,D2,D3,D4,_ = size(A12)
+    Au12 = reshape(ein"abcde,ni->anbicde"(A12, IDh), D1*Dh,D2*Dh,D3,D4,d)
+    Ad12 = conj(A12)
+    Au21 = A21
+    Ad21 = conj(A21)
+    D1,D2,D3,D4,_ = size(A22)
+    Au22 = reshape(ein"abcde,ien->abcdin"(A22, O2), D1,D2,D3,D4*Dh,d)
+    Ad22 = conj(A22)
+    return oc_D_leg4(FLu, FLo, ACu, ACd, FRu, FRo, ARu, ARd, Au11, Ad11, Au12, Ad12, Au21, Ad21, Au22, Ad22; forloop_iter)
+end
+
+function contract_o_D2(FLu::leg4, FLo, ACu, ACd, FRu, FRo, ARu, ARd, A11, A12, A21, A22, O1, O2; forloop_iter)
+    Dh = size(O1, 3)
+    atype = _arraytype(O1)
+    IDh = Zygote.@ignore atype(Matrix{ComplexF64}(I, Dh, Dh))
+    D1,D2,D3,D4,d = size(A11)
+    Au11 = reshape(ein"abcde,ni->abncide"(A11, IDh), D1,D2*Dh,D3*Dh,D4,d)
+    Ad11 = conj(A11)
+    D1,D2,D3,D4,_ = size(A12)
+    Au12 = reshape(ein"abcde,eni->aibcdn"(A12, O1), D1*Dh,D2,D3,D4,d)
+    Ad12 = conj(A12)
+    D1,D2,D3,D4,_ = size(A21)
+    Au21 = reshape(ein"abcde,ien->abcdin"(A21, O2), D1,D2,D3,D4*Dh,d)
+    Ad21 = conj(A21)
+    Au22 = A22
+    Ad22 = conj(A22)
+    return oc_D_leg4(FLu, FLo, ACu, ACd, FRu, FRo, ARu, ARd, Au11, Ad11, Au12, Ad12, Au21, Ad21, Au22, Ad22; forloop_iter)
+end
+
+function expectation_value(model::Heisenberg, A, env, params::iPEPSOptimize)
     @unpack ACu, ARu, ACd, ARd, FLu, FRu, FLo, FRo = env
     Ni, Nj = size(A)
     atype = _arraytype(A[1])
-    O1, O2 = Zygote.@ignore atype.(hamiltonian_trunc(params.model))
+    O1, O2 = Zygote.@ignore atype.(hamiltonian_trunc(model))
     etol = 0
     forloop_iter = params.forloop_iter
     ifcheckpoint = params.ifcheckpoint
@@ -194,6 +282,98 @@ function expectation_value(A, env, params::iPEPSOptimize)
         n = ifcheckpoint ? checkpoint(contract_n2_V, ACu[i,j], FLu[i,j], A[i,j], FRu[i,j], FLo[ir,j], A[ir,j], FRo[ir,j], conj(ACd[irr,j]); forloop_iter) : contract_n2_V(ACu[i,j], FLu[i,j], A[i,j], FRu[i,j], FLo[ir,j], A[ir,j], FRo[ir,j], conj(ACd[irr,j]); forloop_iter)
         params.verbosity >= 4 && println("Vertical energy = $(e/n)")
         etol += e/n
+    end
+
+    params.verbosity >= 4 && println("energy = $(etol/len)")
+
+    return etol/len
+end
+
+function expectation_value(model::J1J2, A, env, params::iPEPSOptimize)
+    @unpack ACu, ARu, ACd, ARd, FLu, FRu, FLo, FRo = env
+    @unpack J1, J2 = model
+    @unpack forloop_iter, ifcheckpoint = params
+
+    Ni, Nj = size(A)
+    atype = _arraytype(A[1])
+    O1, O2 = Zygote.@ignore atype.(hamiltonian_trunc(model))
+    etol = 0
+    len = length(A)
+    for p in 1:len
+        i, j = Tuple(findfirst(==(p), A.pattern))
+        params.verbosity >= 4 && println("===========$i,$j===========")
+        ir = Ni + 1 - i
+        jr = mod1(j + 1, Nj)
+        e = ifcheckpoint ? checkpoint(contract_o2_H, FLo[i,j], ACu[i,j], A[i,j], conj(ACd[ir,j]), FRo[i,jr], ARu[i,jr], A[i,jr], conj(ARd[ir,jr]), O1, O2; forloop_iter) : contract_o2_H(FLo[i,j], ACu[i,j], A[i,j], conj(ACd[ir,j]), FRo[i,jr], ARu[i,jr], A[i,jr], conj(ARd[ir,jr]), O1, O2; forloop_iter)
+        n = ifcheckpoint ? checkpoint(contract_n2_H, FLo[i,j], ACu[i,j], A[i,j], conj(ACd[ir,j]), FRo[i,jr], ARu[i,jr], A[i,jr], conj(ARd[ir,jr]); forloop_iter) : contract_n2_H(FLo[i,j], ACu[i,j], A[i,j], conj(ACd[ir,j]), FRo[i,jr], ARu[i,jr], A[i,jr], conj(ARd[ir,jr]); forloop_iter)
+        params.verbosity >= 4 && println("Horizontal energy = $(e/n)")
+        etol += J1 * e/n
+
+        ir  =  mod1(i + 1, Ni)
+        irr = mod1(Ni - i, Ni) 
+        e = ifcheckpoint ? checkpoint(contract_o2_V, ACu[i,j], FLu[i,j], A[i,j], FRu[i,j], FLo[ir,j], A[ir,j], FRo[ir,j], conj(ACd[irr,j]), O1, O2; forloop_iter) : contract_o2_V(ACu[i,j], FLu[i,j], A[i,j], FRu[i,j], FLo[ir,j], A[ir,j], FRo[ir,j], conj(ACd[irr,j]), O1, O2; forloop_iter)
+        n = ifcheckpoint ? checkpoint(contract_n2_V, ACu[i,j], FLu[i,j], A[i,j], FRu[i,j], FLo[ir,j], A[ir,j], FRo[ir,j], conj(ACd[irr,j]); forloop_iter) : contract_n2_V(ACu[i,j], FLu[i,j], A[i,j], FRu[i,j], FLo[ir,j], A[ir,j], FRo[ir,j], conj(ACd[irr,j]); forloop_iter)
+        params.verbosity >= 4 && println("Vertical energy = $(e/n)")
+        etol += J1 * e/n
+
+        # O1, O2 = Zygote.@ignore atype.(hamiltonian_trunc(J1J2(1.0,0.5,false)))
+        ir  = mod1(i + 1, Ni)
+        irr = mod1(Ni - i, Ni)
+        jr = mod1(j + 1, Nj)
+        e1 = ifcheckpoint ? checkpoint(contract_o_D1, FLu[i,j], FLo[ir,j], ACu[i,j], conj(ACd[irr,j]), FRu[i,jr], FRo[ir,jr], ARu[i,jr], conj(ARd[irr,jr]), A[i,j], A[i,jr], A[ir,j], A[ir,jr], O1, O2; forloop_iter) : contract_o_D1(FLu[i,j], FLo[ir,j], ACu[i,j], conj(ACd[irr,j]), FRu[i,jr], FRo[ir,jr], ARu[i,jr], conj(ARd[irr,jr]), A[i,j], A[i,jr], A[ir,j], A[ir,jr], O1, O2; forloop_iter)
+        e2 = ifcheckpoint ? checkpoint(contract_o_D2, FLu[i,j], FLo[ir,j], ACu[i,j], conj(ACd[irr,j]), FRu[i,jr], FRo[ir,jr], ARu[i,jr], conj(ARd[irr,jr]), A[i,j], A[i,jr], A[ir,j], A[ir,jr], O1, O2; forloop_iter) : contract_o_D2(FLu[i,j], FLo[ir,j], ACu[i,j], conj(ACd[irr,j]), FRu[i,jr], FRo[ir,jr], ARu[i,jr], conj(ARd[irr,jr]), A[i,j], A[i,jr], A[ir,j], A[ir,jr], O1, O2; forloop_iter)
+        n = ifcheckpoint ? checkpoint(contract_n_D, FLu[i,j], FLo[ir,j], ACu[i,j], conj(ACd[irr,j]), FRu[i,jr], FRo[ir,jr], ARu[i,jr], conj(ARd[irr,jr]), A[i,j], A[i,jr], A[ir,j], A[ir,jr]; forloop_iter) : contract_n_D(FLu[i,j], FLo[ir,j], ACu[i,j], conj(ACd[irr,j]), FRu[i,jr], FRo[ir,jr], ARu[i,jr], conj(ARd[irr,jr]), A[i,j], A[i,jr], A[ir,j], A[ir,jr]; forloop_iter)
+        params.verbosity >= 4 && println("h2D1 = $(J2*e1/n)")
+        params.verbosity >= 4 && println("h2D2 = $(J2*e2/n)")
+        etol += J2 * (e1/n + e2/n)
+    end
+
+    params.verbosity >= 4 && println("energy = $(etol/len)")
+
+    return etol/len
+end
+
+function expectation_value(model::SS, A, env, params::iPEPSOptimize)
+    @unpack ACu, ARu, ACd, ARd, FLu, FRu, FLo, FRo = env
+    @unpack J1, J2 = model
+    @unpack forloop_iter, ifcheckpoint = params
+
+    Ni, Nj = size(A)
+    atype = _arraytype(A[1])
+    O1, O2 = Zygote.@ignore atype.(hamiltonian_trunc(model))
+    etol = 0
+    len = length(A)
+    for p in 1:len
+        i, j = Tuple(findfirst(==(p), A.pattern))
+        params.verbosity >= 4 && println("===========$i,$j===========")
+        ir = Ni + 1 - i
+        jr = mod1(j + 1, Nj)
+        e = ifcheckpoint ? checkpoint(contract_o2_H, FLo[i,j], ACu[i,j], A[i,j], conj(ACd[ir,j]), FRo[i,jr], ARu[i,jr], A[i,jr], conj(ARd[ir,jr]), O1, O2; forloop_iter) : contract_o2_H(FLo[i,j], ACu[i,j], A[i,j], conj(ACd[ir,j]), FRo[i,jr], ARu[i,jr], A[i,jr], conj(ARd[ir,jr]), O1, O2; forloop_iter)
+        n = ifcheckpoint ? checkpoint(contract_n2_H, FLo[i,j], ACu[i,j], A[i,j], conj(ACd[ir,j]), FRo[i,jr], ARu[i,jr], A[i,jr], conj(ARd[ir,jr]); forloop_iter) : contract_n2_H(FLo[i,j], ACu[i,j], A[i,j], conj(ACd[ir,j]), FRo[i,jr], ARu[i,jr], A[i,jr], conj(ARd[ir,jr]); forloop_iter)
+        params.verbosity >= 4 && println("Horizontal energy = $(e/n)")
+        etol += J1 * e/n
+
+        ir  =  mod1(i + 1, Ni)
+        irr = mod1(Ni - i, Ni) 
+        e = ifcheckpoint ? checkpoint(contract_o2_V, ACu[i,j], FLu[i,j], A[i,j], FRu[i,j], FLo[ir,j], A[ir,j], FRo[ir,j], conj(ACd[irr,j]), O1, O2; forloop_iter) : contract_o2_V(ACu[i,j], FLu[i,j], A[i,j], FRu[i,j], FLo[ir,j], A[ir,j], FRo[ir,j], conj(ACd[irr,j]), O1, O2; forloop_iter)
+        n = ifcheckpoint ? checkpoint(contract_n2_V, ACu[i,j], FLu[i,j], A[i,j], FRu[i,j], FLo[ir,j], A[ir,j], FRo[ir,j], conj(ACd[irr,j]); forloop_iter) : contract_n2_V(ACu[i,j], FLu[i,j], A[i,j], FRu[i,j], FLo[ir,j], A[ir,j], FRo[ir,j], conj(ACd[irr,j]); forloop_iter)
+        params.verbosity >= 4 && println("Vertical energy = $(e/n)")
+        etol += J1 * e/n
+
+        ir  = mod1(i + 1, Ni)
+        irr = mod1(Ni - i, Ni)
+        jr = mod1(j + 1, Nj)
+        if i % 2 == 1 && j % 2 == 0
+            n = ifcheckpoint ? checkpoint(contract_n_D, FLu[i,j], FLo[ir,j], ACu[i,j], conj(ACd[irr,j]), FRu[i,jr], FRo[ir,jr], ARu[i,jr], conj(ARd[irr,jr]), A[i,j], A[i,jr], A[ir,j], A[ir,jr]; forloop_iter) : contract_n_D(FLu[i,j], FLo[ir,j], ACu[i,j], conj(ACd[irr,j]), FRu[i,jr], FRo[ir,jr], ARu[i,jr], conj(ARd[irr,jr]), A[i,j], A[i,jr], A[ir,j], A[ir,jr]; forloop_iter)
+            e1 = ifcheckpoint ? checkpoint(contract_o_D1, FLu[i,j], FLo[ir,j], ACu[i,j], conj(ACd[irr,j]), FRu[i,jr], FRo[ir,jr], ARu[i,jr], conj(ARd[irr,jr]), A[i,j], A[i,jr], A[ir,j], A[ir,jr], O1, O2; forloop_iter) : contract_o_D1(FLu[i,j], FLo[ir,j], ACu[i,j], conj(ACd[irr,j]), FRu[i,jr], FRo[ir,jr], ARu[i,jr], conj(ARd[irr,jr]), A[i,j], A[i,jr], A[ir,j], A[ir,jr], O1, O2; forloop_iter)
+            params.verbosity >= 4 && println("h2D1 = $(J2*e1/n)")
+            etol += J2 * e1/n
+        elseif i % 2 == 0 && j % 2 == 1
+            n = ifcheckpoint ? checkpoint(contract_n_D, FLu[i,j], FLo[ir,j], ACu[i,j], conj(ACd[irr,j]), FRu[i,jr], FRo[ir,jr], ARu[i,jr], conj(ARd[irr,jr]), A[i,j], A[i,jr], A[ir,j], A[ir,jr]; forloop_iter) : contract_n_D(FLu[i,j], FLo[ir,j], ACu[i,j], conj(ACd[irr,j]), FRu[i,jr], FRo[ir,jr], ARu[i,jr], conj(ARd[irr,jr]), A[i,j], A[i,jr], A[ir,j], A[ir,jr]; forloop_iter)
+            e2 = ifcheckpoint ? checkpoint(contract_o_D2, FLu[i,j], FLo[ir,j], ACu[i,j], conj(ACd[irr,j]), FRu[i,jr], FRo[ir,jr], ARu[i,jr], conj(ARd[irr,jr]), A[i,j], A[i,jr], A[ir,j], A[ir,jr], O1, O2; forloop_iter) : contract_o_D2(FLu[i,j], FLo[ir,j], ACu[i,j], conj(ACd[irr,j]), FRu[i,jr], FRo[ir,jr], ARu[i,jr], conj(ARd[irr,jr]), A[i,j], A[i,jr], A[ir,j], A[ir,jr], O1, O2; forloop_iter)
+            params.verbosity >= 4 && println("h2D2 = $(J2*e2/n)")
+            etol += J2 * e2/n
+        end
     end
 
     params.verbosity >= 4 && println("energy = $(etol/len)")

@@ -27,15 +27,15 @@ function precondition_invese_single_envir(A, grad, rt, params, restriction_ipeps
     for p in 1:length(M)
         i, j = Tuple(findfirst(==(p), M.pattern))
         ir = Ni + 1 - i
-        # n = contract_n1(FLo[i,j], ACu[i,j], A[i,j], conj(ACd[ir,j]), FRo[i,j]; forloop_iter)
+        n = contract_n1(FLo[i,j], ACu[i,j], A[i,j], conj(ACd[ir,j]), FRo[i,j]; forloop_iter)
         # @show n
         # P = ein"((iaej,jbfk),lcgk),idhl->abcdefgh"(re(FLo[i,j]),re(conj(ACd[ir,j])),re(FRo[i,j]),re(ACu[i,j]))/n
         # λ,_ = eigen(reshape(P,D^4,D^4))
         # @show real(λ[end-10:end])
         if params.ifflatten
-            gradnew[:,:,:,:,:,p], _ = linsolve(x->δ * x + TeneT.Mumap_forloop(re(ACu[i,j]),re(conj(ACd[ir,j])),re(FLo[i,j]),re(FRo[i,j]),x;forloop_iter), grad[:,:,:,:,:,p]; isposdef = true, maxiter=1, verbosity=0)
+            gradnew[:,:,:,:,:,p], _ = linsolve(x->δ * x + TeneT.Mumap_forloop(re(ACu[i,j]),re(conj(ACd[ir,j])),re(FLo[i,j]),re(FRo[i,j]),x;forloop_iter)/n, grad[:,:,:,:,:,p]; isposdef = true, maxiter=1, verbosity=0)
         else
-            gradnew[:,:,:,:,:,p], _ = linsolve(x->δ * x + TeneT.Mumap_forloop(ACu[i,j],conj(ACd[ir,j]),FLo[i,j],FRo[i,j],x;forloop_iter), grad[:,:,:,:,:,p]; isposdef = true, maxiter=1, verbosity=0)
+            gradnew[:,:,:,:,:,p], _ = linsolve(x->δ * x + TeneT.Mumap_forloop(ACu[i,j],conj(ACd[ir,j]),FLo[i,j],FRo[i,j],x;forloop_iter)/n, grad[:,:,:,:,:,p]; isposdef = true, maxiter=1, verbosity=0)
         end
     end
 

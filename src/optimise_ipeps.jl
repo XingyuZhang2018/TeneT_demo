@@ -48,24 +48,10 @@ BCVUMPS with parameters `χ`, `tol` and `maxiter`.
 function energy(A, rt, rt′, params::iPEPSOptimize)
     A = build_A(A, params)
     M = build_M(A, params)
-    # n = 1
-    # Zygote.@ignore begin
-    #     rt′ = leading_boundary(rt, M, params.boundary_alg)
-    #     Zygote.@ignore params.reuse_env && update!(rt, rt′)
-    #     env = VUMPSEnv(rt′, M)
-    #     @unpack ACu, ARu, ACd, ARd, FLu, FRu, FLo, FRo = env
-    #     # n, _ = rightenv(ARu, conj(ARd), M, FLo; ifobs=true) 
-    #     λFLo, _ =  rightenv(ARu, conj.(ARd), M; ifobs=true)
-    #     λC, _ = rightCenv(ARu, conj.(ARd);    ifobs=true)
-    #     n = prod(λFLo./λC)
-    # end
-    # A /= sqrt(n[1])
-    # ap = [reshape(ein"abcde,fghmn->afbgchdmen"(A, conj(A)), D^2,D^2,D^2,D^2, 2,2) for A in A]
-    # M  = [ein"abcdee->abcd"(ap) for ap in ap]
     rt, _ = leading_boundary(rt, M, params.boundary_alg)
     Zygote.@ignore update!(rt′, rt)
     env = VUMPSEnv(rt, M, params.boundary_alg)
-    return params.ifcheckpoint ? checkpoint(expectation_value, A, env, params) : expectation_value(A, env, params)
+    return params.ifcheckpoint ? checkpoint(expectation_value, params.model, A, env, params) : expectation_value(params.model, A, env, params)
 end
 
 
@@ -116,7 +102,7 @@ function optimise_ipeps(A, χ::Int, params::iPEPSOptimize;
                                                       inner = _inner, 
                                                       finalize! = (x, f, g, iter)->_finalize!(x, f, g, iter, rt, rt′, D, χ, params, t0, fδEi)
     )
-    return x, fδEi
+    return x, f, g, numfg, normgradhistory
 end
 
 _inner(x, dx1, dx2) = real(dot(dx1, dx2))

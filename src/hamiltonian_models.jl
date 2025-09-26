@@ -19,6 +19,7 @@ return a struct representing the `Ni`x`Nj` heisenberg model with couplings `Jz`,
     Jx::Real = -1.0
     Jy::Real = -1.0
     Jz::Real = 1.0
+    ifrotate::Bool = true
 end
 
 const Sx = Float64[0 1; 1 0]/2
@@ -33,6 +34,42 @@ function hamiltonian(model::Heisenberg)
     h = model.Jx * ein"ij,kl -> ijkl"(Sx, Sx) +
         model.Jy * ein"ij,kl -> ijkl"(Sy, Sy) +
         model.Jz * ein"ij,kl -> ijkl"(Sz, Sz)
-    # h = ein"ijcd,kc,ld -> ijkl"(h,Sx*2,(Sx*2)')
+    if model.ifrotate
+        h = ein"ijcd,kc,ld -> ijkl"(h,Sx*2,(Sx*2)')
+    end
+    return h
+end
+
+@kwdef mutable struct J1J2 <: HamiltonianModel
+    J1::Real = 1.0
+    J2::Real = 0.0
+    ifrotate::Bool = true
+end
+
+function hamiltonian(model::J1J2)
+    if model.ifrotate
+        h = - ein"ij,kl -> ijkl"(Sx, Sx) -
+            ein"ij,kl -> ijkl"(Sy, Sy) +
+            ein"ij,kl -> ijkl"(Sz, Sz)
+        h = ein"ijcd,kc,ld -> ijkl"(h,Sx*2,(Sx*2)')
+        return h
+    else
+        h = ein"ij,kl -> ijkl"(Sx, Sx) +
+            ein"ij,kl -> ijkl"(Sy, Sy) +
+            ein"ij,kl -> ijkl"(Sz, Sz)
+        return h
+    end
+end
+
+# Shastry-Sutherland model
+@kwdef mutable struct SS <: HamiltonianModel
+    J1::Real = 1.0
+    J2::Real = 0.0
+end
+
+function hamiltonian(::SS)
+    h = ein"ij,kl -> ijkl"(Sx, Sx) +
+        ein"ij,kl -> ijkl"(Sy, Sy) +
+        ein"ij,kl -> ijkl"(Sz, Sz)
     return h
 end

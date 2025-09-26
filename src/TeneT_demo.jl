@@ -22,7 +22,7 @@ using TeneT: checkpoint
 import Base: Array
 import CUDA: CuArray
 
-export Heisenberg
+export Heisenberg, J1J2, SS
 export hamiltonian
 export observable
 export SUOptimize, FUOptimize, GradientOptimize, init_ipeps, optimise_ipeps, energy
