@@ -9,7 +9,7 @@ using Zygote
 seed = 88
 Random.seed!(seed)
 atype = CuArray
-D, χ = 2, 10
+D, χ = 6, 64
 pattern = [1 3;
            2 4]
 # pattern = [1;;]
@@ -17,22 +17,22 @@ model = J1J2(1.0, 0.57, false)
 No = 0
 SUτ = 0.0
 ifprecondition = true
-order = :plaquette
+order = :mixed
 if ifprecondition
-    folder = joinpath(pkgdir(TeneT_demo), "data_xyz/$model/$pattern/$order/seed$seed/withprecondition/")
+    folder = joinpath(pkgdir(TeneT_demo), "data/$model/$pattern/$order/seed$seed/withprecondition/")
 else
-    folder = joinpath(pkgdir(TeneT_demo), "data_xyz/$model/$pattern/$order/seed$seed/withoutprecondition/")
+    folder = joinpath(pkgdir(TeneT_demo), "data/$model/$pattern/$order/seed$seed/withoutprecondition/")
 end
 boundary_alg = VUMPS(ifupdown=false,
                      ifdownfromup=false,
                      ifsimple_eig=true,
-                     ifparallelupdown=false,
+                     ifparallelupdown=true,
                      ifcheckpoint=true,
                      forloop_iter=10,
-                     maxiter=300, 
+                     maxiter=30, 
                      miniter=1, 
-                     maxiter_ad=4,
-                     miniter_ad=4,
+                     maxiter_ad=3,
+                     miniter_ad=3,
                      power_iter=5,
                      power_iter_obs=20,
                      show_every=10,
@@ -51,7 +51,7 @@ params = GradientOptimize(model=model,
                           ifSU=false,
                           SUτ=SUτ,
                           ifprecondition=ifprecondition,
-                          iter_precond=0,
+                          iter_precond=3,
                           reuse_env=true, 
                           ifflatten=false,
                           ifsave_env=true,
@@ -59,7 +59,7 @@ params = GradientOptimize(model=model,
                           ifsave_lbfgs=true,
                           ifload_lbfgs=false,
                           order=order,
-                          bondratio=1.0
+                          bondratio=[2.0,1.5]
 )
 A = init_ipeps(;atype, No, d=2, pattern, D, params)
 # A = TeneT_demo.init_ipeps_to_D(;atype, No, D, D_new=3, params)

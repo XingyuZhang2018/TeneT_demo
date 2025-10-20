@@ -10,7 +10,7 @@ function init_ipeps(;atype = Array, No, pattern, D::Int, d::Int, params)
         @info "load ipeps from $file"
     else
         # Ni, Nj = size(pattern)
-        A = rand(ComplexF64, D,D,D,D,d, length(unique(pattern)))
+        A = rand(ComplexF64, D,D,D,D,d, length(unique(pattern))) + ones(ComplexF64, D,D,D,D,d, length(unique(pattern)))
         # A = randSA(ComplexF64, atype, pattern, [(D,D,D,D,d) for i in 1:length(unique(pattern))])
         A /= norm(A)
         @info "random initial ipeps"

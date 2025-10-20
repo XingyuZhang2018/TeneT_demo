@@ -37,6 +37,7 @@ include("optimise_ipeps.jl")
 include("init_ipeps_env.jl")
 include("SU_parameterization.jl")
 include("build_A_M.jl")
+include("order_init.jl")
 include("observable.jl")
 include("SUFU.jl")
 

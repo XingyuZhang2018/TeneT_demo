@@ -8,13 +8,13 @@ using LinearAlgebra
 
 seed = 72
 Random.seed!(seed)
-atype = Array
-D, χ = 2, 10
+atype = CuArray
+D, χ = 4, 128
 pattern = [1 2;
            2 1]
 # pattern = [1;;]
 model = Heisenberg(1.0,1.0,1.0)
-No = 0
+No = 80
 SUτ = 0.0
 ifprecondition = true
 if ifprecondition
@@ -27,7 +27,7 @@ boundary_alg = VUMPS(ifupdown=true,
                      ifsimple_eig=true,
                      ifparallelupdown=false,
                      ifcheckpoint=false,
-                     forloop_iter=1,
+                     forloop_iter=4,
                      maxiter=30, 
                      miniter=1, 
                      maxiter_ad=4,
@@ -44,19 +44,19 @@ params = GradientOptimize(model=model,
                      #    optimizer=GradientDescent(),
                           optimizer=LBFGS(200; maxiter=100, verbosity=4, gradtol=1e-7),
                           ifcheckpoint=false,
-                          forloop_iter=1,
+                          forloop_iter=4,
                           verbosity=4, 
                           folder=folder,
                           ifSU=false,
                           SUτ=SUτ,
                           ifprecondition=ifprecondition,
-                          iter_precond=0,
+                          iter_precond=10,
                           reuse_env=true, 
                           ifflatten=false,
                           ifsave_env=true,
                           ifload_env=false,
                           ifsave_lbfgs=true,
-                          ifload_lbfgs=true
+                          ifload_lbfgs=false
 )
 A = init_ipeps(;atype, No, d=2, pattern, D, params)
 # A = TeneT_demo.init_ipeps_to_D(;atype, No, D, D_new=3, params)

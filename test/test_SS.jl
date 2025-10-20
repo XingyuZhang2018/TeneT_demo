@@ -8,15 +8,15 @@ using LinearAlgebra
 
 seed = 42
 Random.seed!(seed)
-atype = Array
-D, χ = 2, 10
+atype = CuArray
+D, χ = 3, 64
 pattern = [1 3;
            2 4]
 # pattern = [1;;]
-model = SS(1.0,0.5)
+model = SS(0.63,1.0)
 No = 0
 SUτ = 0.0
-ifprecondition = true
+ifprecondition = false
 if ifprecondition
     folder = joinpath(pkgdir(TeneT_demo), "data/$model/$pattern/seed$seed/withprecondition/")
 else
@@ -54,9 +54,9 @@ params = GradientOptimize(model=model,
                           reuse_env=true, 
                           ifflatten=false,
                           ifsave_env=true,
-                          ifload_env=false,
+                          ifload_env=true,
                           ifsave_lbfgs=true,
-                          ifload_lbfgs=false
+                          ifload_lbfgs=true
 )
 A = init_ipeps(;atype, No, d=2, pattern, D, params)
 # A = TeneT_demo.init_ipeps_to_D(;atype, No, D, D_new=3, params)

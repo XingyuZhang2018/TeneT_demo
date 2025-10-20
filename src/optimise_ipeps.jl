@@ -22,6 +22,9 @@
 
     ifsave_lbfgs::Bool = true
     ifload_lbfgs::Bool = true
+
+    order::Symbol = :none
+    bondratio = 1.0
 end
 
 """
@@ -48,10 +51,11 @@ BCVUMPS with parameters `χ`, `tol` and `maxiter`.
 function energy(A, rt, rt′, params::iPEPSOptimize)
     A = build_A(A, params)
     M = build_M(A, params)
+    # rt, _ = params.ifcheckpoint ? checkpoint(leading_boundary, rt, M, params.boundary_alg) : leading_boundary(rt, M, params.boundary_alg)
     rt, _ = leading_boundary(rt, M, params.boundary_alg)
     Zygote.@ignore update!(rt′, rt)
     env = VUMPSEnv(rt, M, params.boundary_alg)
-    return params.ifcheckpoint ? checkpoint(expectation_value, params.model, A, env, params) : expectation_value(params.model, A, env, params)
+    return expectation_value(params.model, A, env, params)
 end
 
 
@@ -132,6 +136,9 @@ function _finalize!(x, f, g, iter, rt, rt′, D, χ, params, t0, fδEi)
         save(joinpath(folder0, "ipeps", "ipeps_No.$(iter).jld2"), "bcipeps", Array(x))
     end
     
+    if abs(fδEi[2]) < 1e-12
+        g .= 0
+    end
     return x, f, g
 end 
 
