@@ -8,13 +8,13 @@ using Zygote
 
 seed = 42
 Random.seed!(seed)
-atype = Array
-D, χ, χshifit = 2, 20, 1
+atype = CuArray
+D, χ, χshifit = 4, 20, 1
 pattern = [1 3;
            2 4]
 # pattern = [1;;]
 model = J1J2(J2=0.57, ifrotate=false)
-No = 30
+No = 0
 SUτ = 0.0
 order = :mixed
 folder = joinpath(pkgdir(TeneT_demo), "data/$model/$pattern/$order/seed$seed/")
@@ -83,7 +83,7 @@ optimise_ipeps(A, χ, χshifit, params;
                restriction_ipeps = _restriction_ipeps
 );
 
-# observable(A, χ, [1,1,1,0.0], params;
+# observable(A, χ, params;
 #            restriction_ipeps = _restriction_ipeps
 # );
 # println(1)

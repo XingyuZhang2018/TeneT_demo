@@ -32,14 +32,18 @@ end
 return the energy of the `bcipeps` 2-site hamiltonian `h` and calculated via a
 BCVUMPS with parameters `χ`, `tol` and `maxiter`.
 """
-function energy(A, rt, rt′, fδEiEI, params::iPEPSOptimize)
+function energy(A, rt, rt′, fδEierr, params::iPEPSOptimize)
     A = build_A(A, params)
     M = build_M(A, params)
     # rt, _ = params.ifcheckpoint ? checkpoint(leading_boundary, rt, M, params.boundary_alg) : leading_boundary(rt, M, params.boundary_alg)
-    rt, _ = leading_boundary(rt, M, params.boundary_alg)
-    Zygote.@ignore update!(rt′, rt)
+    rt, err = leading_boundary(rt, M, params.boundary_alg)
+    Zygote.@ignore begin
+        update!(rt′, rt)
+        fδEierr[4] = sum(err)
+    end
     env = VUMPSEnv(rt, M, params.boundary_alg)
-    return expectation_value(params.model, A, env, fδEiEI, params)[1]
+    
+    return expectation_value(params.model, A, env, params)[1]
 end
 
 
@@ -57,13 +61,13 @@ function optimise_ipeps(A, χ::Int, χshift::Int, params::iPEPSOptimize;
     D = size(A, 1)
     rt = initialize_vumps_runtime(A, D, χ, params; restriction_ipeps)
     rt′ = deepcopy(rt)
-    fδEiEI = [1.0,1.0,0,0]
+    fδEierr = [1.0,1.0,0.0,0.0]
 
     params_obs = deepcopy(params)
     params_obs.boundary_alg.maxiter = params.boundary_alg.maxiter * 10
     function fenergy(A)
         A = restriction_ipeps(A)
-        return real(energy(A, rt, rt′, fδEiEI, params))
+        return real(energy(A, rt, rt′, fδEierr, params))
     end
     function fg(x)
         t1 = time()
@@ -79,10 +83,10 @@ function optimise_ipeps(A, χ::Int, χshift::Int, params::iPEPSOptimize;
     alg = params.optimizer
     t0 = time()
     
-    _precondition(x, g) = params.ifprecondition ? precondition_invese_single_envir(x, g, rt, params, restriction_ipeps, fδEiEI, params.iter_precond) : g
+    _precondition(x, g) = params.ifprecondition ? precondition_invese_single_envir(x, g, rt, params, restriction_ipeps, fδEierr, params.iter_precond) : g
     
     state_path = joinpath(params.folder, "D$(D)", "lbfgs_checkpoint")
-    # _precondition(x, g) = precondition_invese_hessian(x, g, rt, rt′, params, restriction_ipeps, fδEiEI , params.iter_precond)
+    # _precondition(x, g) = precondition_invese_hessian(x, g, rt, rt′, params, restriction_ipeps, fδEierr , params.iter_precond)
     # local x, f, g, numfg, normgradhistory
     for _ in 1:100
         A, e, _ = optimize_reload(fg, A, alg; 
@@ -91,10 +95,10 @@ function optimise_ipeps(A, χ::Int, χshift::Int, params::iPEPSOptimize;
                                   save_every=params.save_every,
                                   precondition=_precondition, 
                                   inner = _inner, 
-                                  finalize! = (x, f, g, iter)->_finalize!(x, f, g, iter, rt, rt′, D, χ, params, t0, fδEiEI)
+                                  finalize! = (x, f, g, iter)->_finalize!(x, f, g, iter, rt, rt′, D, χ, params, t0, fδEierr)
         )
         χ += χshift 
-        enew, = observable(A, χ, fδEiEI, params_obs; restriction_ipeps)
+        enew, = observable(A, χ, params_obs; restriction_ipeps)
         rt = initialize_vumps_runtime(A, D, χ, params; restriction_ipeps)
         rt′ = deepcopy(rt)
         if abs(real(enew[1]) - e) < 1e-7
@@ -104,12 +108,12 @@ function optimise_ipeps(A, χ::Int, χshift::Int, params::iPEPSOptimize;
 end
 
 _inner(x, dx1, dx2) = real(dot(dx1, dx2))
-function _finalize!(x, f, g, iter, rt, rt′, D, χ, params, t0, fδEiEI )
+function _finalize!(x, f, g, iter, rt, rt′, D, χ, params, t0, fδEierr )
     @unpack folder = params
 
-    fδEiEI[3] = iter
-    fδEiEI[2] = abs(fδEiEI[1] - f)
-    fδEiEI[1] = f
+    fδEierr[3] = iter
+    fδEierr[2] = abs(fδEierr[1] - f)
+    fδEierr[1] = f
     message = @sprintf("i = %5d\tt = %0.2f sec\te_χ%d = %.15f\tgnorm = %.3e\n", iter, time() - t0, χ, f, norm(g))
 
     folder0 = joinpath(folder, "D$(D)")
@@ -129,7 +133,7 @@ function _finalize!(x, f, g, iter, rt, rt′, D, χ, params, t0, fδEiEI )
         save(joinpath(folder0,  "ipeps", "χ$χ", "No.$(iter).jld2"), "bcipeps", Array(x))
     end
     
-    if abs(fδEiEI[2]) < 1e-12 || abs(fδEiEI[4]) > 1e-7
+    if abs(fδEierr[2]) < 1e-12 || fδEierr[4] > 1e-7
         g .= 0
     end
     return x, f, g

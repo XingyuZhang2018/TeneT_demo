@@ -1,5 +1,5 @@
 
-function expectation_value(model::Heisenberg, A, env, fδEiEI, params::iPEPSOptimize)
+function expectation_value(model::Heisenberg, A, env, fδEierr, params::iPEPSOptimize)
     @unpack ACu, ARu, ACd, ARd, FLu, FRu, FLo, FRo = env
     Ni, Nj = size(A)
     atype = _arraytype(A[1])
@@ -27,12 +27,12 @@ function expectation_value(model::Heisenberg, A, env, fδEiEI, params::iPEPSOpti
     end
 
     params.verbosity >= 4 && println("energy = $(etol/len)")
-    Zygote.@ignore fδEiEI[4] = imag(etol/len)
+    Zygote.@ignore fδEierr[4] = imag(etol/len)
 
     return etol/len
 end
 
-function expectation_value(model::J1J2, A, env, fδEiEI, params::iPEPSOptimize)
+function expectation_value(model::J1J2, A, env, params::iPEPSOptimize)
     @unpack ACu, ARu, ACd, ARd, FLu, FRu, FLo, FRo = env
     @unpack J1, J2 = model
     @unpack forloop_iter, ifcheckpoint, bondratio, order = params
@@ -86,7 +86,7 @@ function expectation_value(model::J1J2, A, env, fδEiEI, params::iPEPSOptimize)
     end
 
     params.verbosity >= 4 && println("energy = $(etol/len)")
-    Zygote.@ignore fδEiEI[4] = abs(imag(etol/len))
+    # Zygote.@ignore fδEierr[4] = abs(imag(etol/len))
     return etol/len, e_dict
 end
 
@@ -215,7 +215,7 @@ function cor_len_value(env, params)
     return ξ
 end
 
-function observable(A, χ, fδEiEI, params::iPEPSOptimize; restriction_ipeps = _restriction_ipeps)
+function observable(A, χ, params::iPEPSOptimize; restriction_ipeps = _restriction_ipeps)
     D = size(A, 1)
     rt = initialize_vumps_runtime(A, D, χ, params; restriction_ipeps)
 
@@ -226,7 +226,7 @@ function observable(A, χ, fδEiEI, params::iPEPSOptimize; restriction_ipeps = _
     rt, _ = leading_boundary(rt, M, params.boundary_alg)
     params.ifsave_env && save_rt(joinpath(params.folder, "D$(D)", "VUMPS_rt_env"), rt; file="χ$(χ).jld2")
     env = VUMPSEnv(rt, M, params.boundary_alg)
-    e = expectation_value(params.model, A, env, fδEiEI, params)
+    e = expectation_value(params.model, A, env, params)
     mag = magnetization_value(params.model, A, env, params)
     ξ = cor_len_value(env, params)
     write_obs_log(e, mag, ξ, χ, joinpath(params.folder, "D$(D)"), params)
