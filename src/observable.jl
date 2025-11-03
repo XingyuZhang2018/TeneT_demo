@@ -13,15 +13,15 @@ function expectation_value(model::Heisenberg, A, env, fδEiEI, params::iPEPSOpti
         params.verbosity >= 4 && println("===========$i,$j===========")
         ir = Ni + 1 - i
         jr = mod1(j + 1, Nj)
-        e = contract_o2_H(FLo[i,j], ACu[i,j], A[i,j], conj(ACd[ir,j]), FRo[i,jr], ARu[i,jr], A[i,jr], conj(ARd[ir,jr]), O1, O2; forloop_iter)
-        n = contract_n2_H(FLo[i,j], ACu[i,j], A[i,j], conj(ACd[ir,j]), FRo[i,jr], ARu[i,jr], A[i,jr], conj(ARd[ir,jr]); forloop_iter)
+        e = contract_o2_H(FLo[i,j], ACu[i,j], A[i,j], ACd[ir,j], FRo[i,jr], ARu[i,jr], A[i,jr], ARd[ir,jr], O1, O2; forloop_iter)
+        n = contract_n2_H(FLo[i,j], ACu[i,j], A[i,j], ACd[ir,j], FRo[i,jr], ARu[i,jr], A[i,jr], ARd[ir,jr]; forloop_iter)
         params.verbosity >= 4 && println("Horizontal energy = $(e/n)")
         etol += e/n
 
         ir  =  mod1(i + 1, Ni)
         irr = mod1(Ni - i, Ni) 
-        e = contract_o2_V(ACu[i,j], FLu[i,j], A[i,j], FRu[i,j], FLo[ir,j], A[ir,j], FRo[ir,j], conj(ACd[irr,j]), O1, O2; forloop_iter)
-        n = contract_n2_V(ACu[i,j], FLu[i,j], A[i,j], FRu[i,j], FLo[ir,j], A[ir,j], FRo[ir,j], conj(ACd[irr,j]); forloop_iter)
+        e = contract_o2_V(ACu[i,j], FLu[i,j], A[i,j], FRu[i,j], FLo[ir,j], A[ir,j], FRo[ir,j], ACd[irr,j], O1, O2; forloop_iter)
+        n = contract_n2_V(ACu[i,j], FLu[i,j], A[i,j], FRu[i,j], FLo[ir,j], A[ir,j], FRo[ir,j], ACd[irr,j]; forloop_iter)
         params.verbosity >= 4 && println("Vertical energy = $(e/n)")
         etol += e/n
     end
@@ -55,16 +55,16 @@ function expectation_value(model::J1J2, A, env, fδEiEI, params::iPEPSOptimize)
         params.verbosity >= 4 && println("===========$i,$j===========")
         ir = Ni + 1 - i
         jr = mod1(j + 1, Nj)
-        e = contract_o2_H(FLo[i,j], ACu[i,j], A[i,j], conj(ACd[ir,j]), FRo[i,jr], ARu[i,jr], A[i,jr], conj(ARd[ir,jr]), O1, O2; forloop_iter)
-        n = contract_n2_H(FLo[i,j], ACu[i,j], A[i,j], conj(ACd[ir,j]), FRo[i,jr], ARu[i,jr], A[i,jr], conj(ARd[ir,jr]); forloop_iter)
+        e = contract_o2_H(FLo[i,j], ACu[i,j], A[i,j], ACd[ir,j], FRo[i,jr], ARu[i,jr], A[i,jr], ARd[ir,jr], O1, O2; forloop_iter)
+        n = contract_n2_H(FLo[i,j], ACu[i,j], A[i,j], ACd[ir,j], FRo[i,jr], ARu[i,jr], A[i,jr], ARd[ir,jr]; forloop_iter)
         params.verbosity >= 4 && println("Horizontal energy = $(e/n)")
         etol += J1h * e/n
         e_dict["Horizontal_energy"]["$(i),$(j)"] = J1h * e/n
 
         ir  =  mod1(i + 1, Ni)
         irr = mod1(Ni - i, Ni) 
-        e = contract_o2_V(ACu[i,j], FLu[i,j], A[i,j], FRu[i,j], FLo[ir,j], A[ir,j], FRo[ir,j], conj(ACd[irr,j]), O1, O2; forloop_iter)
-        n = contract_n2_V(ACu[i,j], FLu[i,j], A[i,j], FRu[i,j], FLo[ir,j], A[ir,j], FRo[ir,j], conj(ACd[irr,j]); forloop_iter)
+        e = contract_o2_V(ACu[i,j], FLu[i,j], A[i,j], FRu[i,j], FLo[ir,j], A[ir,j], FRo[ir,j], ACd[irr,j], O1, O2; forloop_iter)
+        n = contract_n2_V(ACu[i,j], FLu[i,j], A[i,j], FRu[i,j], FLo[ir,j], A[ir,j], FRo[ir,j], ACd[irr,j]; forloop_iter)
         params.verbosity >= 4 && println("Vertical energy = $(e/n)")
         etol += J1v * e/n
         e_dict["Vertical_energy"]["$(i),$(j)"] = J1v * e/n
@@ -75,9 +75,9 @@ function expectation_value(model::J1J2, A, env, fδEiEI, params::iPEPSOptimize)
         ir  = mod1(i + 1, Ni)
         irr = mod1(Ni - i, Ni)
         jr = mod1(j + 1, Nj)
-        e1 = contract_o_D1(FLu[i,j], FLo[ir,j], ACu[i,j], conj(ACd[irr,j]), FRu[i,jr], FRo[ir,jr], ARu[i,jr], conj(ARd[irr,jr]), A[i,j], A[i,jr], A[ir,j], A[ir,jr], O1, O2; forloop_iter)
-        e2 = contract_o_D2(FLu[i,j], FLo[ir,j], ACu[i,j], conj(ACd[irr,j]), FRu[i,jr], FRo[ir,jr], ARu[i,jr], conj(ARd[irr,jr]), A[i,j], A[i,jr], A[ir,j], A[ir,jr], O1, O2; forloop_iter)
-        n = contract_n_D(FLu[i,j], FLo[ir,j], ACu[i,j], conj(ACd[irr,j]), FRu[i,jr], FRo[ir,jr], ARu[i,jr], conj(ARd[irr,jr]), A[i,j], A[i,jr], A[ir,j], A[ir,jr]; forloop_iter)
+        e1 = contract_o_D1(FLu[i,j], FLo[ir,j], ACu[i,j], ACd[irr,j], FRu[i,jr], FRo[ir,jr], ARu[i,jr], ARd[irr,jr], A[i,j], A[i,jr], A[ir,j], A[ir,jr], O1, O2; forloop_iter)
+        e2 = contract_o_D2(FLu[i,j], FLo[ir,j], ACu[i,j], ACd[irr,j], FRu[i,jr], FRo[ir,jr], ARu[i,jr], ARd[irr,jr], A[i,j], A[i,jr], A[ir,j], A[ir,jr], O1, O2; forloop_iter)
+        n = contract_n_D(FLu[i,j], FLo[ir,j], ACu[i,j], ACd[irr,j], FRu[i,jr], FRo[ir,jr], ARu[i,jr], ARd[irr,jr], A[i,j], A[i,jr], A[ir,j], A[ir,jr]; forloop_iter)
         params.verbosity >= 4 && println("h2D1 = $(J2*e1/n)")
         params.verbosity >= 4 && println("h2D2 = $(J2*e2/n)")
         etol += J2 * (e1/n + e2/n)
@@ -105,8 +105,8 @@ function expectation_value(model::SS, A, env, params::iPEPSOptimize)
         params.verbosity >= 4 && println("===========$i,$j===========")
         ir = Ni + 1 - i
         jr = mod1(j + 1, Nj)
-        e = contract_o2_H(FLo[i,j], ACu[i,j], A[i,j], conj(ACd[ir,j]), FRo[i,jr], ARu[i,jr], A[i,jr], conj(ARd[ir,jr]), O1, O2; forloop_iter)
-        n = contract_n2_H(FLo[i,j], ACu[i,j], A[i,j], conj(ACd[ir,j]), FRo[i,jr], ARu[i,jr], A[i,jr], conj(ARd[ir,jr]); forloop_iter)
+        e = contract_o2_H(FLo[i,j], ACu[i,j], A[i,j], ACd[ir,j], FRo[i,jr], ARu[i,jr], A[i,jr], ARd[ir,jr], O1, O2; forloop_iter)
+        n = contract_n2_H(FLo[i,j], ACu[i,j], A[i,j], ACd[ir,j], FRo[i,jr], ARu[i,jr], A[i,jr], ARd[ir,jr]; forloop_iter)
         params.verbosity >= 4 && println("Horizontal energy = $(e/n)")
         etol += J1 * e/n
 
@@ -156,11 +156,11 @@ function magnetization_value(model, A, env, params)
         i, j = Tuple(findfirst(==(p), ACu.pattern))
         params.verbosity >= 4 && println("===========$i,$j===========")
         ir = Ni + 1 - i
-        Mx = contract_o1(FLo[i,j],ACu[i,j],A[i,j],conj(ACd[ir,j]),FRo[i,j], Sx; forloop_iter)
-        My = contract_o1(FLo[i,j],ACu[i,j],A[i,j],conj(ACd[ir,j]),FRo[i,j], Sy; forloop_iter)
-        Mz = contract_o1(FLo[i,j],ACu[i,j],A[i,j],conj(ACd[ir,j]),FRo[i,j], Sz; forloop_iter)
+        Mx = contract_o1(FLo[i,j],ACu[i,j],A[i,j],ACd[ir,j],FRo[i,j], Sx; forloop_iter)
+        My = contract_o1(FLo[i,j],ACu[i,j],A[i,j],ACd[ir,j],FRo[i,j], Sy; forloop_iter)
+        Mz = contract_o1(FLo[i,j],ACu[i,j],A[i,j],ACd[ir,j],FRo[i,j], Sz; forloop_iter)
         
-        n = contract_n1(FLo[i,j],ACu[i,j],A[i,j],conj(ACd[ir,j]),FRo[i,j]; forloop_iter)
+        n = contract_n1(FLo[i,j],ACu[i,j],A[i,j],ACd[ir,j],FRo[i,j]; forloop_iter)
         Mag = [Mx/n, My/n, Mz/n]
         Mnorm[i,j] = norm(Mag)
         params.verbosity >= 4 && println("M = $(Mag)\n|M| = $(Mnorm)")

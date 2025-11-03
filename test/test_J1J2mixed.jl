@@ -6,29 +6,24 @@ using OptimKit
 using LinearAlgebra
 using Zygote
 
-seed = 88
+seed = 42
 Random.seed!(seed)
-atype = CuArray
-D, χ = 6, 64
+atype = Array
+D, χ, χshifit = 2, 20, 1
 pattern = [1 3;
            2 4]
 # pattern = [1;;]
-model = J1J2(1.0, 0.57, false)
-No = 0
+model = J1J2(J2=0.57, ifrotate=false)
+No = 30
 SUτ = 0.0
-ifprecondition = true
 order = :mixed
-if ifprecondition
-    folder = joinpath(pkgdir(TeneT_demo), "data/$model/$pattern/$order/seed$seed/withprecondition/")
-else
-    folder = joinpath(pkgdir(TeneT_demo), "data/$model/$pattern/$order/seed$seed/withoutprecondition/")
-end
+folder = joinpath(pkgdir(TeneT_demo), "data/$model/$pattern/$order/seed$seed/")
 boundary_alg = VUMPS(ifupdown=false,
                      ifdownfromup=false,
                      ifsimple_eig=true,
-                     ifparallelupdown=true,
-                     ifcheckpoint=true,
-                     forloop_iter=10,
+                     ifparallelupdown=false,
+                     ifcheckpoint=false,
+                     forloop_iter=1,
                      maxiter=30, 
                      miniter=1, 
                      maxiter_ad=3,
@@ -43,31 +38,31 @@ params = GradientOptimize(model=model,
                           pattern=pattern,
                           boundary_alg=boundary_alg, 
                      #    optimizer=GradientDescent(),
-                          optimizer=LBFGS(200; maxiter=0, verbosity=4, gradtol=1e-7),
-                          ifcheckpoint=true,
-                          forloop_iter=10,
+                          optimizer=LBFGS(200; maxiter=100, verbosity=4, gradtol=1e-7, linesearch=HagerZhangLineSearch(maxfg=5)),
+                          ifcheckpoint=false,
+                          forloop_iter=1,
                           verbosity=4, 
                           folder=folder,
                           ifSU=false,
                           SUτ=SUτ,
-                          ifprecondition=ifprecondition,
-                          iter_precond=3,
+                          ifprecondition=false,
+                          iter_precond=0,
                           reuse_env=true, 
                           ifflatten=false,
                           ifsave_env=true,
-                          ifload_env=false,
+                          ifload_env=true,
                           ifsave_lbfgs=true,
                           ifload_lbfgs=false,
                           order=order,
-                          bondratio=[2.0,1.5]
+                          bondratio=[1.0,1.0]
 )
-A = init_ipeps(;atype, No, d=2, pattern, D, params)
+A = init_ipeps(;atype, No, d=2, pattern, D, χ, params)
 # A = TeneT_demo.init_ipeps_to_D(;atype, No, D, D_new=3, params)
 
 function _restriction_ipeps(A)
     Ar = Zygote.Buffer(A)
     Ar[:,:,:,:,:,1] = A[:,:,:,:,:,1]
-    Ar[:,:,:,:,:,1] += permutedims(Ar[:,:,:,:,:,1],(4,3,2,1,5))
+    # Ar[:,:,:,:,:,1] += permutedims(Ar[:,:,:,:,:,1],(4,3,2,1,5))
     # Ar[:,:,:,:,:,1] += permutedims(Ar[:,:,:,:,:,1],(4,2,3,1,5))
     # Ar[:,:,:,:,:,1] += permutedims(Ar[:,:,:,:,:,1],(1,3,2,4,5))
 
@@ -80,11 +75,15 @@ function _restriction_ipeps(A)
     Ar[:,:,:,:,:,4] = permutedims(Ar[:,:,:,:,:,1], (3,4,1,2,5))
 
     Ar = copy(Ar)
-    return Ar/norm(Ar)
+    return Ar
     # return A
 end
 
-optimise_ipeps(A, χ, params;
-               restriction_ipeps = _restriction_ipeps);
+optimise_ipeps(A, χ, χshifit, params;
+               restriction_ipeps = _restriction_ipeps
+);
 
-println(1)
+# observable(A, χ, [1,1,1,0.0], params;
+#            restriction_ipeps = _restriction_ipeps
+# );
+# println(1)
