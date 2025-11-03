@@ -8,15 +8,15 @@ using LinearAlgebra
 
 seed = 72
 Random.seed!(seed)
-atype = CuArray
-D, χ = 4, 128
-pattern = [1 2;
-           2 1]
-# pattern = [1;;]
-model = Heisenberg(1.0,1.0,1.0)
-No = 80
+atype = Array
+D, χ = 3, 10
+# pattern = [1 2;
+#            2 1]
+pattern = [1;;]
+model = Heisenberg(-1.0,-1.0,1.0, true)
+No = 0
 SUτ = 0.0
-ifprecondition = true
+ifprecondition = false
 if ifprecondition
     folder = joinpath(pkgdir(TeneT_demo), "data/$model/$pattern/seed$seed/withprecondition/")
 else
@@ -27,7 +27,7 @@ boundary_alg = VUMPS(ifupdown=true,
                      ifsimple_eig=true,
                      ifparallelupdown=false,
                      ifcheckpoint=false,
-                     forloop_iter=4,
+                     forloop_iter=1,
                      maxiter=30, 
                      miniter=1, 
                      maxiter_ad=4,
@@ -42,9 +42,9 @@ params = GradientOptimize(model=model,
                           pattern=pattern,
                           boundary_alg=boundary_alg, 
                      #    optimizer=GradientDescent(),
-                          optimizer=LBFGS(200; maxiter=100, verbosity=4, gradtol=1e-7),
+                          optimizer=LBFGS(200; maxiter=100, verbosity=4, gradtol=1e-7, linesearch=HagerZhangLineSearch(maxiter=2, maxfg=3)),
                           ifcheckpoint=false,
-                          forloop_iter=4,
+                          forloop_iter=1,
                           verbosity=4, 
                           folder=folder,
                           ifSU=false,
@@ -54,7 +54,7 @@ params = GradientOptimize(model=model,
                           reuse_env=true, 
                           ifflatten=false,
                           ifsave_env=true,
-                          ifload_env=false,
+                          ifload_env=true,
                           ifsave_lbfgs=true,
                           ifload_lbfgs=false
 )
@@ -67,22 +67,34 @@ function _restriction_ipeps(A)
 #    A += permutedims(conj(A), (2,1,4,3,5,6)) # diagonal
 #    A += permutedims(conj(A), (4,3,2,1,5,6)) # rotation
 
-   # Ar = Zygote.Buffer(A)
-   # for i in 1:length(A)
-   # for j in 1:Nj, i in 1:Ni
-   #     if (i,j) in [(2,1)]
-   #         Ar[i,j] = A[i,j] + permutedims(conj(A[i,j]), (1,4,3,2,5))
-   #     elseif (i,j) in [(3,1)]
-   #         Ar[i,j] = permutedims(conj(A[1,1]), (1,4,3,2,5))
-   #     else
-   #         Ar[i,j] = A[i,j]
-   #     end
-   # end
-   # Ar = copy(Ar)
-   # return Ar/norm(Ar)
-   # λ = Zygote.@ignore norm(A)
+#    Ar = Zygote.Buffer(A)
+#    for i in 1:length(A)
+#    for j in 1:Nj, i in 1:Ni
+#        if (i,j) in [(2,1)]
+#            Ar[i,j] = A[i,j] + permutedims(conj(A[i,j]), (1,4,3,2,5))
+#        elseif (i,j) in [(3,1)]
+#            Ar[i,j] = permutedims(conj(A[1,1]), (1,4,3,2,5))
+#        else
+#            Ar[i,j] = A[i,j]
+#        end
+#    end
+#    Ar = copy(Ar)
+#    return Ar/norm(Ar)
+#    λ = Zygote.@ignore norm(A)
+    # A = TeneT_demo._restriction_ipeps(A)
+    # A = TeneT_demo.central_canonical1(A)
+    A = TeneT_demo.pepsgeneral(A)[1]
    return A
 end
 
-optimise_ipeps(A, χ, params;
-               restriction_ipeps = _restriction_ipeps);
+optimise_ipeps(A, χ, 1, params;
+               restriction_ipeps = _restriction_ipeps
+);
+# es = []
+# for χ in 20:10:20
+    # e, ξ = observable(A, χ, params; 
+    # # restriction_ipeps = _restriction_ipeps
+    # )
+#     push!(es, real(e))
+# end
+# @show es

@@ -3,14 +3,15 @@
 Initial `bcipeps` and give `key` for use of later optimization. The key include `model`, `D`, `χ`, `tol` and `maxiter`. 
 The iPEPS is random initial if there isn't any calculation before, otherwise will be load from file `/data/model_D_chi_tol_maxiter.jld2`
 """
-function init_ipeps(;atype = Array, No, pattern, D::Int, d::Int, params)
+function init_ipeps(;atype = Array, No, pattern, χ::Int, D::Int, d::Int, params)
     if No != 0
-        file = "$(params.folder)/D$(D)/ipeps/ipeps_No.$(No).jld2"
+        file = joinpath("$(params.folder)", "D$(D)", "ipeps", "χ$(χ)", "No.$(No).jld2")
         A = load(file, "bcipeps")
         @info "load ipeps from $file"
     else
         # Ni, Nj = size(pattern)
         A = rand(ComplexF64, D,D,D,D,d, length(unique(pattern))) + ones(ComplexF64, D,D,D,D,d, length(unique(pattern)))
+        # A = rand(ComplexF64, D,D,D,D,d, length(unique(pattern)))
         # A = randSA(ComplexF64, atype, pattern, [(D,D,D,D,d) for i in 1:length(unique(pattern))])
         A /= norm(A)
         @info "random initial ipeps"
@@ -51,7 +52,7 @@ function initialize_vumps_runtime(A, D, χ, params; restriction_ipeps)
     if params.ifload_env
         if ispath(file_path)
             try
-                return load_rt(folder_path, _arraytype(A); file="χ$χ.jld2")
+                return load_rt(folder_path, _arraytype(A), params.boundary_alg.ifparallelupdown; file="χ$χ.jld2")
             catch e
                 @warn "Failed to load runtime environment from $file_path: $(sprint(showerror, e)). Creating new environment."
                 return create_new_runtime(A, χ, params; restriction_ipeps)
