@@ -6,13 +6,15 @@ using LinearAlgebra
 using LineSearches
 using Random
 using OptimKit
-using OMEinsum
+# using OMEinsum
+using TensorOperations
 using Printf
 using Parameters
 using ForwardDiff
 using Zygote
 using TeneT
 using CUDA
+using cuTENSOR
 using AMDGPU
 
 using TeneT: ALCtoAC, _arraytype, update!, mcform, rightenv, rightCenv

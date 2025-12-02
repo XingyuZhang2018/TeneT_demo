@@ -69,11 +69,15 @@ function hamiltonian(model::Heisenberg)
     Sx = const_Sx(S)
     Sy = const_Sy(S)
     Sz = const_Sz(S)
-    h = model.Jx * ein"ij,kl -> ijkl"(Sx, Sx) +
-        model.Jy * ein"ij,kl -> ijkl"(Sy, Sy) +
-        model.Jz * ein"ij,kl -> ijkl"(Sz, Sz)
+    # h = model.Jx * ein"ij,kl -> ijkl"(Sx, Sx) +
+    #     model.Jy * ein"ij,kl -> ijkl"(Sy, Sy) +
+    #     model.Jz * ein"ij,kl -> ijkl"(Sz, Sz)
+    h = model.Jx * (@tensor out[i,j,k,l] := Sx[i,j] * Sx[k,l]) +
+        model.Jy * (@tensor out[i,j,k,l] := Sy[i,j] * Sy[k,l]) +
+        model.Jz * (@tensor out[i,j,k,l] := Sz[i,j] * Sz[k,l])
     if model.ifrotate
-        h = ein"ijcd,kc,ld -> ijkl"(h,Sx*2,(Sx*2)')
+        # h = ein"ijcd,kc,ld -> ijkl"(h,Sx*2,(Sx*2)')
+        h = @tensor out[i,j,k,l] := h[i,j,c,d] * (Sx*2)[k,c] * conj((Sx*2)[l,d])
     end
     return h
 end
@@ -91,15 +95,22 @@ function hamiltonian(model::J1J2)
     Sy = const_Sy(S)
     Sz = const_Sz(S)
     if model.ifrotate
-        h = - ein"ij,kl -> ijkl"(Sx, Sx) -
-            ein"ij,kl -> ijkl"(Sy, Sy) +
-            ein"ij,kl -> ijkl"(Sz, Sz)
-        h = ein"ijcd,kc,ld -> ijkl"(h,Sx*2,(Sx*2)')
+        # h = - ein"ij,kl -> ijkl"(Sx, Sx) -
+        #     ein"ij,kl -> ijkl"(Sy, Sy) +
+        #     ein"ij,kl -> ijkl"(Sz, Sz)
+        h = - (@tensor out[i,j,k,l] := Sx[i,j] * Sx[k,l]) -
+            (@tensor out[i,j,k,l] := Sy[i,j] * Sy[k,l]) +
+            (@tensor out[i,j,k,l] := Sz[i,j] * Sz[k,l])
+        # h = ein"ijcd,kc,ld -> ijkl"(h,Sx*2,(Sx*2)')
+        h = @tensor out[i,j,k,l] := h[i,j,c,d] * (Sx*2)[k,c] * conj(Sx*2[l,d])
         return h
     else
-        h = ein"ij,kl -> ijkl"(Sx, Sx) +
-            ein"ij,kl -> ijkl"(Sy, Sy) +
-            ein"ij,kl -> ijkl"(Sz, Sz)
+        # h = ein"ij,kl -> ijkl"(Sx, Sx) +
+        #     ein"ij,kl -> ijkl"(Sy, Sy) +
+        #     ein"ij,kl -> ijkl"(Sz, Sz)
+        h = (@tensor out[i,j,k,l] := Sx[i,j] * Sx[k,l]) +
+            (@tensor out[i,j,k,l] := Sy[i,j] * Sy[k,l]) +
+            (@tensor out[i,j,k,l] := Sz[i,j] * Sz[k,l])
         return h
     end
 end
@@ -116,8 +127,11 @@ function hamiltonian(::SS)
     Sx = const_Sx(S)
     Sy = const_Sy(S)
     Sz = const_Sz(S)
-    h = ein"ij,kl -> ijkl"(Sx, Sx) +
-        ein"ij,kl -> ijkl"(Sy, Sy) +
-        ein"ij,kl -> ijkl"(Sz, Sz)
+    # h = ein"ij,kl -> ijkl"(Sx, Sx) +
+    #     ein"ij,kl -> ijkl"(Sy, Sy) +
+    #     ein"ij,kl -> ijkl"(Sz, Sz)
+    h = (@tensor out[i,j,k,l] := Sx[i,j] * Sx[k,l]) +
+        (@tensor out[i,j,k,l] := Sy[i,j] * Sy[k,l]) +
+        (@tensor out[i,j,k,l] := Sz[i,j] * Sz[k,l])
     return h
 end

@@ -37,13 +37,15 @@ function energy(A, rt, rt′, fδEierr, params::iPEPSOptimize)
     M = build_M(A, params)
     # rt, _ = params.ifcheckpoint ? checkpoint(leading_boundary, rt, M, params.boundary_alg) : leading_boundary(rt, M, params.boundary_alg)
     rt, err = leading_boundary(rt, M, params.boundary_alg)
+    env = VUMPSEnv(rt, M, params.boundary_alg)
+    e = expectation_value(params.model, A, env, params)[1]
+
     Zygote.@ignore begin
         update!(rt′, rt)
-        fδEierr[4] = sum(err)
+        fδEierr[4] = abs(imag(e))
     end
-    env = VUMPSEnv(rt, M, params.boundary_alg)
-    
-    return expectation_value(params.model, A, env, params)[1]
+
+    return e
 end
 
 
@@ -89,38 +91,55 @@ function optimise_ipeps(A, χ::Int, χshift::Int, params::iPEPSOptimize;
     # _precondition(x, g) = precondition_invese_hessian(x, g, rt, rt′, params, restriction_ipeps, fδEierr , params.iter_precond)
     # local x, f, g, numfg, normgradhistory
     for _ in 1:100
-        A, e, _ = optimize_reload(fg, A, alg; 
+        A, e, eg, fgnum, history = optimize_reload(fg, A, alg; 
                                   resume_from = params.ifload_lbfgs ? joinpath(state_path, "χ$χ.jld2") : nothing,
                                   save_state_to = params.ifsave_lbfgs ? joinpath(state_path, "χ$χ.jld2") : nothing,
                                   save_every=params.save_every,
                                   precondition=_precondition, 
                                   inner = _inner, 
-                                  finalize! = (x, f, g, iter)->_finalize!(x, f, g, iter, rt, rt′, D, χ, params, t0, fδEierr)
+                                  finalize! = (x, f, g, iter)->_finalize!(x, f, g, iter, rt, rt′, D, χ, χshift, params, t0, fδEierr; restriction_ipeps)
         )
         χ += χshift 
         enew, = observable(A, χ, params_obs; restriction_ipeps)
         rt = initialize_vumps_runtime(A, D, χ, params; restriction_ipeps)
         rt′ = deepcopy(rt)
-        if abs(real(enew[1]) - e) < 1e-7
+        if abs(real(enew[1]) - e) < 1e-7 && history[end-1] < 1e-5
             break
         end
     end
 end
 
 _inner(x, dx1, dx2) = real(dot(dx1, dx2))
-function _finalize!(x, f, g, iter, rt, rt′, D, χ, params, t0, fδEierr )
+function _finalize!(x, f, g, iter, rt, rt′, D, χ, χshift, params, t0, fδEierr; restriction_ipeps)
     @unpack folder = params
 
     fδEierr[3] = iter
     fδEierr[2] = abs(fδEierr[1] - f)
     fδEierr[1] = f
-    message = @sprintf("i = %5d\tt = %0.2f sec\te_χ%d = %.15f\tgnorm = %.3e\n", iter, time() - t0, χ, f, norm(g))
+    message = @sprintf("i = %5d\tt = %0.2f sec\te_χ%d = %.15f\tgnorm = %.3e\tEimag = %.3e\n", iter, time() - t0, χ, f, norm(g), fδEierr[4])
 
     folder0 = joinpath(folder, "D$(D)")
     !(ispath(folder0)) && mkpath(folder0)
     folder1 = joinpath(folder, "D$(D)", "VUMPS_rt_env")
     params.reuse_env && update!(rt, rt′)
     params.ifsave_env && save_rt(folder1, rt; file="χ$(χ).jld2")
+
+    # f_new = f
+    # if iter % 10 == 0
+    #     @info "Checking energy decrease..."
+    #     A = restriction_ipeps(x)
+    #     params′ = deepcopy(params)
+    #     params′.boundary_alg.maxiter = params.boundary_alg.maxiter * 10
+    #     χ += χshift 
+    #     rtnew = initialize_vumps_runtime(A, D, χ, params; restriction_ipeps)
+    #     rtnew′ = deepcopy(rt)
+    #     f_new = real(energy(A, rtnew, rtnew′, fδEierr, params′))
+    #     update!(rtnew, rtnew′)
+    #     params.ifsave_env && save_rt(folder1, rtnew; file="χ$(χ).jld2")
+    #     @info "Energy at iteration $iter : $f_new (previous $f) diff $(f_new - f)"
+    # end
+    
+
     if params.verbosity >= 3 && iter % params.show_every == 0
         printstyled(message; bold=true, color=:red)
         flush(stdout)
@@ -133,7 +152,7 @@ function _finalize!(x, f, g, iter, rt, rt′, D, χ, params, t0, fδEierr )
         save(joinpath(folder0,  "ipeps", "χ$χ", "No.$(iter).jld2"), "bcipeps", Array(x))
     end
     
-    if abs(fδEierr[2]) < 1e-12 || fδEierr[4] > 1e-7
+    if abs(fδEierr[2]) < 1e-12 || abs(fδEierr[4]) > 1e-8
         g .= 0
     end
     return x, f, g

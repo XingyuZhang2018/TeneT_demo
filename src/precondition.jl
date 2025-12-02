@@ -4,9 +4,9 @@ function precondition_invese_single_envir(A, grad, rt, params, restriction_ipeps
         return grad
     end
     δ = fδEi[2]
-    A = restriction_ipeps(A)
-    A = build_A(A, params)
-    M = build_M(A, params) 
+    A′ = restriction_ipeps(A)
+    A′ = build_A(A′, params)
+    M = build_M(A′, params) 
     # Random.seed!(4564135)
     # rt = VUMPSRuntime(M, 1, params.boundary_alg)
     # rt = leading_boundary(rt, M, params.boundary_alg)
@@ -27,7 +27,7 @@ function precondition_invese_single_envir(A, grad, rt, params, restriction_ipeps
     for p in 1:length(M)
         i, j = Tuple(findfirst(==(p), M.pattern))
         ir = Ni + 1 - i
-        n = contract_n1(FLo[i,j], ACu[i,j], A[i,j], conj(ACd[ir,j]), FRo[i,j]; forloop_iter)
+        n = contract_n1(FLo[i,j], ACu[i,j], A′[i,j], ACd[ir,j], FRo[i,j]; forloop_iter)
         # @show n
         # P = ein"((iaej,jbfk),lcgk),idhl->abcdefgh"(re(FLo[i,j]),re(conj(ACd[ir,j])),re(FRo[i,j]),re(ACu[i,j]))/n
         # λ,_ = eigen(reshape(P,D^4,D^4))
@@ -35,8 +35,17 @@ function precondition_invese_single_envir(A, grad, rt, params, restriction_ipeps
         if params.ifflatten
             gradnew[:,:,:,:,:,p], _ = linsolve(x->δ * x + TeneT.Mumap_forloop(re(ACu[i,j]),re(conj(ACd[ir,j])),re(FLo[i,j]),re(FRo[i,j]),x;forloop_iter)/n, grad[:,:,:,:,:,p]; isposdef = true, maxiter=1, verbosity=0)
         else
-            gradnew[:,:,:,:,:,p], _ = linsolve(x->δ * x + TeneT.Mumap_forloop(ACu[i,j],conj(ACd[ir,j]),FLo[i,j],FRo[i,j],x;forloop_iter)/n, grad[:,:,:,:,:,p]; isposdef = true, maxiter=1, verbosity=0)
+            gradnew[:,:,:,:,:,p], _ = linsolve(x->δ * x + TeneT.Mumap_forloop(ACu[i,j],ACd[ir,j],FLo[i,j],FRo[i,j],x; forloop_iter)/n, grad[:,:,:,:,:,p]; isposdef = true, maxiter=1, verbosity=0)
         end
+            # gradnew[:,:,:,:,:,p], _ = linsolve(grad[:,:,:,:,:,p]; isposdef = true, maxiter=1, verbosity=0) do x
+            #     function f(Au) 
+            #         G = find_local_min_norm_G(Au)
+            #         ForwardDiff.gradient(y -> (@tensor TeneT.Mumap_forloop(ACu[i,j],conj(ACd[ir,j]),FLo[i,j],FRo[i,j],guage_transfer(A, G); forloop_iter)[a,b,c,d,p] * conj(guage_transfer(y, G))[a,b,c,d,p])/n, Au)
+            #     end
+            #     gN = ForwardDiff.derivative(t -> f(A + t * x), 0.0)
+            #     return δ * x + gN
+            # end
+        # end
     end
 
     return gradnew
@@ -52,7 +61,8 @@ function precondition_invese_hessian(A, grad, rt, rt′, params, restriction_ipe
 
     function contract_n1(FLo, ACu, A, Ap, ACd, FRo; forloop_iter)
         D1,D2,D3,D4,_ = size(A)
-        M = reshape(ein"abcde,fghme->afbgchdm"(A, Ap), D1^2,D2^2,D3^2,D4^2)
+        # M = reshape(ein"abcde,fghme->afbgchdm"(A, Ap), D1^2,D2^2,D3^2,D4^2)
+        @tensor M[a,f,b,g,c,h,d,m] := A[a,b,c,d,e] * Ap[f,g,h,m,e]
         return sum(oc1_leg3(FLo, ACu, M, ACd, FRo; forloop_iter))
     end
     
@@ -60,7 +70,11 @@ function precondition_invese_hessian(A, grad, rt, rt′, params, restriction_ipe
         D = size(A[1], 1)
         len = length(unique(params.pattern))
         if params.ifflatten
-            return StructArray([reshape(ein"abcde,fghme->afbgchdm"(A[i], Ap[i]), D^2,D^2,D^2,D^2) for i in 1:len], params.pattern)
+            # return StructArray([reshape(ein"abcde,fghme->afbgchdm"(A[i], Ap[i]), D^2,D^2,D^2,D^2) for i in 1:len], params.pattern)
+            return StructArray([begin
+                @tensor M[a,f,b,g,c,h,d,m] := A[i][a,b,c,d,e] * Ap[i][f,g,h,m,e]
+                reshape(M, D^2,D^2,D^2,D^2)
+            end for i in 1:len], params.pattern)
         else
             throw(Base.error("precondition only supports ifflatten=true currently"))
         end
@@ -107,7 +121,8 @@ function precondition_invese_BP_envir(A, grad, rt, params, restriction_ipeps, f�
     error = 1.0
     Z = 1.0
     for i in 1:100
-        B = ein"((abcd,d),c),b -> a"(M[1],B,B,B)
+        # B = ein"((abcd,d),c),b -> a"(M[1],B,B,B)
+        @tensor B[a] := M[1][a,b,c,d] * B[d] * B[c] * B[b]
         Z_n = dot(B,B)
         normalize!(B)
         error = norm(Z_n - Z)
@@ -126,11 +141,14 @@ function precondition_invese_BP_envir(A, grad, rt, params, restriction_ipeps, f�
     for p in 1:length(M)
         i, j = Tuple(findfirst(==(p), M.pattern))
         ir = Ni + 1 - i
-        n = sum(ein"((abcd,d),c),b,a ->"(M[1],B,B,B,B))
+        # n = sum(ein"((abcd,d),c),b,a ->"(M[1],B,B,B,B))
+        n = @tensor M[1][a,b,c,d] * B[d] * B[c] * B[b] * B[a]
         # P = ein"ae,bf,cg,dh->abcdefgh"(reB,reB,reB,reB)/n
         # λ,_ = eigen(reshape(P,D^4,D^4))
         # @show real(λ[end-10:end])
-        gradnew[p], _ = linsolve(x->δ * x + ein"(((abcdp,ae),bf),cg),dh->efghp"(x,reB,reB,reB,reB)/n, grad[p]; isposdef = true, maxiter=1)
+        # gradnew[p], _ = linsolve(x->δ * x + ein"(((abcdp,ae),bf),cg),dh->efghp"(x,reB,reB,reB,reB)/n, grad[p]; isposdef = true, maxiter=1)
+        gradnew[p], _ = linsolve(x->δ * x + (@tensor xout[e,f,g,h,p] := x[a,b,c,d,p] * reB[a,e] * reB[b,f] * reB[c,g] * reB[d,h]
+        )/n, grad[p]; isposdef = true, maxiter=1)
         # gradnew[p] = ein"(((abcdp,ae),bf),cg),dh->efghp"(grad[p],reB,reB,reB,reB)*n
     end
 

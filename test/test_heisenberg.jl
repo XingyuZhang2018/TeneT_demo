@@ -8,20 +8,21 @@ using LinearAlgebra
 
 seed = 72
 Random.seed!(seed)
-atype = Array
-D, χ = 3, 10
+atype = CuArray
+D, χ, χshift = 3, 20, 0
 # pattern = [1 2;
 #            2 1]
 pattern = [1;;]
-model = Heisenberg(-1.0,-1.0,1.0, true)
+model = Heisenberg(0.5, -1.0,-1.0,1.0, true)
 No = 0
 SUτ = 0.0
 ifprecondition = false
-if ifprecondition
-    folder = joinpath(pkgdir(TeneT_demo), "data/$model/$pattern/seed$seed/withprecondition/")
-else
-    folder = joinpath(pkgdir(TeneT_demo), "data/$model/$pattern/seed$seed/withoutprecondition/")
-end
+# if ifprecondition
+    # folder = joinpath(pkgdir(TeneT_demo), "data/$model/$pattern/seed$seed/withprecondition/")
+# else
+    # folder = joinpath(pkgdir(TeneT_demo), "data/$model/$pattern/seed$seed/withoutprecondition/")
+# end
+folder = joinpath(pkgdir(TeneT_demo), "data/$model/$pattern/seed$seed/general/")
 boundary_alg = VUMPS(ifupdown=true,
                      ifdownfromup=false,
                      ifsimple_eig=true,
@@ -42,7 +43,7 @@ params = GradientOptimize(model=model,
                           pattern=pattern,
                           boundary_alg=boundary_alg, 
                      #    optimizer=GradientDescent(),
-                          optimizer=LBFGS(200; maxiter=100, verbosity=4, gradtol=1e-7, linesearch=HagerZhangLineSearch(maxiter=2, maxfg=3)),
+                          optimizer=LBFGS(200; maxiter=100, verbosity=4, gradtol=1e-7, linesearch=HagerZhangLineSearch(maxfg=5)),
                           ifcheckpoint=false,
                           forloop_iter=1,
                           verbosity=4, 
@@ -50,7 +51,7 @@ params = GradientOptimize(model=model,
                           ifSU=false,
                           SUτ=SUτ,
                           ifprecondition=ifprecondition,
-                          iter_precond=10,
+                          iter_precond=0,
                           reuse_env=true, 
                           ifflatten=false,
                           ifsave_env=true,
@@ -58,10 +59,10 @@ params = GradientOptimize(model=model,
                           ifsave_lbfgs=true,
                           ifload_lbfgs=false
 )
-A = init_ipeps(;atype, No, d=2, pattern, D, params)
+A = init_ipeps(;atype, No, d=2, pattern, D, χ, params)
 # A = TeneT_demo.init_ipeps_to_D(;atype, No, D, D_new=3, params)
 
-function _restriction_ipeps(A)
+function restriction_ipeps(A)
 #    A += permutedims(conj(A), (1,4,3,2,5,6)) # up-down
 #    A += permutedims(conj(A), (3,2,1,4,5,6)) # left-right
 #    A += permutedims(conj(A), (2,1,4,3,5,6)) # diagonal
@@ -83,18 +84,20 @@ function _restriction_ipeps(A)
 #    λ = Zygote.@ignore norm(A)
     # A = TeneT_demo._restriction_ipeps(A)
     # A = TeneT_demo.central_canonical1(A)
-    A = TeneT_demo.pepsgeneral(A)[1]
+    # A = TeneT_demo.pepsgeneral(A)[1]
+#    A = TeneT_demo.rand_gauge(A)
+#    A = TeneT_demo.local_min_norm(A)
    return A
 end
 
-optimise_ipeps(A, χ, 1, params;
-               restriction_ipeps = _restriction_ipeps
+optimise_ipeps(A, χ, χshift, params;
+               restriction_ipeps
 );
 # es = []
 # for χ in 20:10:20
-    # e, ξ = observable(A, χ, params; 
-    # # restriction_ipeps = _restriction_ipeps
+    # e, ξ = observable(A, 57, params; 
+    # restriction_ipeps
     # )
-#     push!(es, real(e))
+    # push!(es, real(e))
 # end
 # @show es

@@ -1,5 +1,4 @@
-
-function expectation_value(model::Heisenberg, A, env, fδEierr, params::iPEPSOptimize)
+function expectation_value(model::Heisenberg, A, env, params::iPEPSOptimize)
     @unpack ACu, ARu, ACd, ARd, FLu, FRu, FLo, FRo = env
     Ni, Nj = size(A)
     atype = _arraytype(A[1])
@@ -8,6 +7,10 @@ function expectation_value(model::Heisenberg, A, env, fδEierr, params::iPEPSOpt
     forloop_iter = params.forloop_iter
     ifcheckpoint = params.ifcheckpoint
     len = length(A)
+    e_dict = Dict{String, Dict{String, Any}}(
+        "Horizontal_energy" => Dict{String, Any}(),
+        "Vertical_energy"   => Dict{String, Any}()
+    )
     for p in 1:len
         i, j = Tuple(findfirst(==(p), A.pattern))
         params.verbosity >= 4 && println("===========$i,$j===========")
@@ -17,6 +20,7 @@ function expectation_value(model::Heisenberg, A, env, fδEierr, params::iPEPSOpt
         n = contract_n2_H(FLo[i,j], ACu[i,j], A[i,j], ACd[ir,j], FRo[i,jr], ARu[i,jr], A[i,jr], ARd[ir,jr]; forloop_iter)
         params.verbosity >= 4 && println("Horizontal energy = $(e/n)")
         etol += e/n
+        e_dict["Horizontal_energy"]["$(i),$(j)"] = e/n
 
         ir  =  mod1(i + 1, Ni)
         irr = mod1(Ni - i, Ni) 
@@ -24,12 +28,12 @@ function expectation_value(model::Heisenberg, A, env, fδEierr, params::iPEPSOpt
         n = contract_n2_V(ACu[i,j], FLu[i,j], A[i,j], FRu[i,j], FLo[ir,j], A[ir,j], FRo[ir,j], ACd[irr,j]; forloop_iter)
         params.verbosity >= 4 && println("Vertical energy = $(e/n)")
         etol += e/n
+        e_dict["Vertical_energy"]["$(i),$(j)"] = e/n
     end
 
     params.verbosity >= 4 && println("energy = $(etol/len)")
-    Zygote.@ignore fδEierr[4] = imag(etol/len)
 
-    return etol/len
+    return etol/len, e_dict
 end
 
 function expectation_value(model::J1J2, A, env, params::iPEPSOptimize)
@@ -39,7 +43,6 @@ function expectation_value(model::J1J2, A, env, params::iPEPSOptimize)
 
     Ni, Nj = size(A)
     atype = _arraytype(A[1])
-    O1, O2 = Zygote.@ignore atype.(hamiltonian_trunc(model))
     etol = 0
     len = length(A)
     e_dict = Dict{String, Dict{String, Any}}(
@@ -51,6 +54,7 @@ function expectation_value(model::J1J2, A, env, params::iPEPSOptimize)
     for p in 1:len
         i, j = Tuple(findfirst(==(p), A.pattern))
         J1h, J1v = enlarge_coupling(model, order, i, j, bondratio)
+        O1, O2 = Zygote.@ignore atype.(hamiltonian_trunc(model))
 
         params.verbosity >= 4 && println("===========$i,$j===========")
         ir = Ni + 1 - i
@@ -70,7 +74,7 @@ function expectation_value(model::J1J2, A, env, params::iPEPSOptimize)
         e_dict["Vertical_energy"]["$(i),$(j)"] = J1v * e/n
 
         if model.ifrotate
-            O1, O2 = Zygote.@ignore atype.(hamiltonian_trunc(J1J2(model.J1,model.J2,false)))
+            O1, O2 = Zygote.@ignore atype.(hamiltonian_trunc(J1J2(model.S,model.J1,model.J2,false)))
         end
         ir  = mod1(i + 1, Ni)
         irr = mod1(Ni - i, Ni)

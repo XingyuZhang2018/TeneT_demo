@@ -27,7 +27,11 @@ function build_M(A, params)
     D = size(A[1], 1)
     len = length(unique(params.pattern))
     if params.ifflatten
-        return StructArray([reshape(ein"abcde,fghme->afbgchdm"(A[i], conj(A[i])), D^2,D^2,D^2,D^2) for i in 1:len], params.pattern)
+        # return StructArray([reshape(ein"abcde,fghme->afbgchdm"(A[i], conj(A[i])), D^2,D^2,D^2,D^2) for i in 1:len], params.pattern)
+        return StructArray([begin
+            @tensor M[a,f,b,g,c,h,d,m] := A[i][a,b,c,d,e] * conj(A[i][f,g,h,m,e])
+            reshape(M, D^2,D^2,D^2,D^2)
+        end for i in 1:len], params.pattern)
     else
         return A
     end
