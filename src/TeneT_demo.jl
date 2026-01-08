@@ -1,12 +1,13 @@
 module TeneT_demo
 
+using ChainRulesCore
 using FileIO
 using KrylovKit
 using LinearAlgebra
 using LineSearches
 using Random
 using OptimKit
-# using OMEinsum
+using OMEinsum
 using TensorOperations
 using Printf
 using Parameters
@@ -19,14 +20,14 @@ using AMDGPU
 
 using TeneT: ALCtoAC, _arraytype, update!, mcform, rightenv, rightCenv
 using TeneT: leg3, leg4
-using TeneT: FLmap_forloop, FRmap_forloop, ACmap_forloop
+using TeneT: FLmap_forloop, FRmap_forloop, ACmap_forloop, ACdmap_forloop
 using TeneT: checkpoint
 
 import Base: Array
 import CUDA: CuArray
 import AMDGPU: ROCArray
 
-export Heisenberg, J1J2, SS
+export Heisenberg, J1J2, SS, Kagome, J1J2J3
 export hamiltonian
 export observable
 export SUOptimize, FUOptimize, GradientOptimize, init_ipeps, optimise_ipeps, energy

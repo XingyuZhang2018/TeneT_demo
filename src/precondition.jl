@@ -4,7 +4,9 @@ function precondition_invese_single_envir(A, grad, rt, params, restriction_ipeps
         return grad
     end
     δ = fδEi[2]
-    A′ = restriction_ipeps(A)
+    # A′ = restriction_ipeps(A)
+    Gh, Gv = find_local_hermite_G(A, params)
+    A′ = guage_transfer(A, [Gh, Gv], params)
     A′ = build_A(A′, params)
     M = build_M(A′, params) 
     # Random.seed!(4564135)
@@ -22,10 +24,11 @@ function precondition_invese_single_envir(A, grad, rt, params, restriction_ipeps
     end
 
     gradnew = deepcopy(grad)
-    Ni = size(M)[1]
+    Ni,Nj = size(M)
     forloop_iter = params.forloop_iter
+    pattern = M.pattern
     for p in 1:length(M)
-        i, j = Tuple(findfirst(==(p), M.pattern))
+        i, j = Tuple(findfirst(==(p), pattern))
         ir = Ni + 1 - i
         n = contract_n1(FLo[i,j], ACu[i,j], A′[i,j], ACd[ir,j], FRo[i,j]; forloop_iter)
         # @show n
@@ -36,6 +39,22 @@ function precondition_invese_single_envir(A, grad, rt, params, restriction_ipeps
             gradnew[:,:,:,:,:,p], _ = linsolve(x->δ * x + TeneT.Mumap_forloop(re(ACu[i,j]),re(conj(ACd[ir,j])),re(FLo[i,j]),re(FRo[i,j]),x;forloop_iter)/n, grad[:,:,:,:,:,p]; isposdef = true, maxiter=1, verbosity=0)
         else
             gradnew[:,:,:,:,:,p], _ = linsolve(x->δ * x + TeneT.Mumap_forloop(ACu[i,j],ACd[ir,j],FLo[i,j],FRo[i,j],x; forloop_iter)/n, grad[:,:,:,:,:,p]; isposdef = true, maxiter=1, verbosity=0)
+            irr = mod1(i - 1, Ni)
+            jr = mod1(j - 1, Nj)
+            G_temp = [Gh[:,:,pattern[i,jr]], inv(Gv[:,:,p]), inv(Gh[:,:,p]), Gv[:,:,pattern[irr,j]]]
+            gradnew[:,:,:,:,:,p] = local_gauge_contraction(gradnew[:,:,:,:,:,p], G_temp)
+
+            
+            # gradnew[:,:,:,:,:,q], _ = linsolve(grad[:,:,:,:,:,q]; isposdef = true, maxiter=1, verbosity=0) do x
+            #     irr = mod1(i - 1, Ni)
+            #     jr = mod1(j - 1, Nj) 
+            #     G_temp = [inv(Gh[:,:,pattern[i,jr]]), Gv[:,:,q], Gh[:,:,q], inv(Gv[:,:,pattern[irr,j]])]
+            #     function f(Au)
+            #         ForwardDiff.gradient(y -> real((@tensor Mumap_forloop(ACu[i,j],ACd[ir,j],FLo[i,j],FRo[i,j], local_gauge_contraction(Au[:,:,:,:,:,q], G_temp); ifparallel)[a,b,c,d,p] * conj(local_gauge_contraction(y, G_temp))[a,b,c,d,p])/n), A[:,:,:,:,:,q])
+            #     end
+            #     gN = ForwardDiff.derivative(t -> f(A + t * x), 0.0)
+            #     return δ * x + gN
+            # end
         end
             # gradnew[:,:,:,:,:,p], _ = linsolve(grad[:,:,:,:,:,p]; isposdef = true, maxiter=1, verbosity=0) do x
             #     function f(Au) 

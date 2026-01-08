@@ -3,14 +3,14 @@
 Initial `bcipeps` and give `key` for use of later optimization. The key include `model`, `D`, `χ`, `tol` and `maxiter`. 
 The iPEPS is random initial if there isn't any calculation before, otherwise will be load from file `/data/model_D_chi_tol_maxiter.jld2`
 """
-function init_ipeps(;atype = Array, No, pattern, χ::Int, D::Int, d::Int, params)
+function init_ipeps(;atype = Array, etype=ComplexF64, No, pattern, χ::Int, D::Int, d::Int, params)
     if No != 0
         file = joinpath("$(params.folder)", "D$(D)", "ipeps", "χ$(χ)", "No.$(No).jld2")
         A = load(file, "bcipeps")
         @info "load ipeps from $file"
     else
         # Ni, Nj = size(pattern)
-        A = rand(ComplexF64, D,D,D,D,d, length(unique(pattern)))
+        A = rand(etype, D,D,D,D,d, length(unique(pattern))) + ones(etype, D,D,D,D,d, length(unique(pattern)))
         # A = rand(ComplexF64, D,D,D,D,d, length(unique(pattern)))
         # A = randSA(ComplexF64, atype, pattern, [(D,D,D,D,d) for i in 1:length(unique(pattern))])
         A /= norm(A)

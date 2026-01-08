@@ -94,6 +94,89 @@ function expectation_value(model::J1J2, A, env, params::iPEPSOptimize)
     return etol/len, e_dict
 end
 
+function expectation_value(model::J1J2J3, A, env, params::iPEPSOptimize)
+    @unpack ACu, ARu, ACd, ARd, FLu, FRu, FLo, FRo = env
+    @unpack J1, J2, J3 = model
+    @unpack forloop_iter, ifcheckpoint, bondratio, order = params
+
+    Ni, Nj = size(A)
+    atype = _arraytype(A[1])
+    etol = 0
+    len = length(A)
+    e_dict = Dict{String, Dict{String, Any}}(
+        "J1_Horizontal_energy" => Dict{String, Any}(),
+        "J1_Vertical_energy"   => Dict{String, Any}(),
+        "J3_Horizontal_energy" => Dict{String, Any}(),
+        "J3_Vertical_energy"   => Dict{String, Any}(),
+        "J2_Diagonal1_energy"  => Dict{String, Any}(),
+        "J2_Diagonal2_energy"  => Dict{String, Any}()
+    )
+    for p in 1:len
+        i, j = Tuple(findfirst(==(p), A.pattern))
+        O1, O2 = Zygote.@ignore atype.(hamiltonian_trunc(model))
+
+        params.verbosity >= 4 && println("===========$i,$j===========")
+        id = Ni + 1 - i
+        jr = mod1(j + 1, Nj)
+        e = contract_o2_H(FLo[i,j], ACu[i,j], A[i,j], ACd[id,j], FRo[i,jr], ARu[i,jr], A[i,jr], ARd[id,jr], O1, O2; forloop_iter)
+        n = contract_n2_H(FLo[i,j], ACu[i,j], A[i,j], ACd[id,j], FRo[i,jr], ARu[i,jr], A[i,jr], ARd[id,jr]; forloop_iter)
+        params.verbosity >= 4 && println("J1_Horizontal_energy = $(J1*e/n)")
+        etol += J1 * e/n
+        e_dict["J1_Horizontal_energy"]["$(i),$(j)"] = J1 * e/n
+
+        ir  =  mod1(i + 1, Ni)
+        id = mod1(Ni - i, Ni) 
+        e = contract_o2_V(ACu[i,j], FLu[i,j], A[i,j], FRu[i,j], FLo[ir,j], A[ir,j], FRo[ir,j], ACd[id,j], O1, O2; forloop_iter)
+        n = contract_n2_V(ACu[i,j], FLu[i,j], A[i,j], FRu[i,j], FLo[ir,j], A[ir,j], FRo[ir,j], ACd[id,j]; forloop_iter)
+        params.verbosity >= 4 && println("J1_Vertical energy = $(J1*e/n)")
+        etol += J1 * e/n
+        e_dict["J1_Vertical_energy"]["$(i),$(j)"] = J1 * e/n
+
+        if (i + j) % 2 == 0
+            ir  = mod1(i + 1, Ni)
+            id = mod1(Ni - i, Ni)
+            jr = mod1(j + 1, Nj)
+            e = contract_o_D1(FLu[i,j], FLo[ir,j], ACu[i,j], ACd[id,j], FRu[i,jr], FRo[ir,jr], ARu[i,jr], ARd[id,jr], A[i,j], A[i,jr], A[ir,j], A[ir,jr], O1, O2; forloop_iter)
+            n = contract_n_D(FLu[i,j], FLo[ir,j], ACu[i,j], ACd[id,j], FRu[i,jr], FRo[ir,jr], ARu[i,jr], ARd[id,jr], A[i,j], A[i,jr], A[ir,j], A[ir,jr]; forloop_iter)
+            params.verbosity >= 4 && println("J2_Diagonal1_energy = $(J2*e/n)")
+            etol += J2 * e/n
+            e_dict["J2_Diagonal1_energy"]["$(i),$(j)"] = J2 * e/n
+
+            id = Ni + 1 - i
+            jr = mod1(j + 1, Nj)
+            jrr = mod1(j + 2, Nj)
+            e = contract_o3_H(FLo[i,j], ACu[i,j], ACd[id,j], FRo[i,jrr], ARu[i,jr], ARd[id,jr], ARu[i,jrr], ARd[id,jrr], A[i,j], A[i,jr], A[i,jrr], O1, O2; forloop_iter)
+            n = contract_n3_H(FLo[i,j], ACu[i,j], ACd[id,j], FRo[i,jrr], ARu[i,jr], ARd[id,jr], ARu[i,jrr], ARd[id,jrr], A[i,j], A[i,jr], A[i,jrr]; forloop_iter)
+            params.verbosity >= 4 && println("J3_Horizontal_energy = $(J3*e/n)")
+            etol += J3 * e/n
+            e_dict["J3_Horizontal_energy"]["$(i),$(j)"] = J3 * e/n
+
+            ir = mod1(i + 1, Ni)
+            irr = mod1(i + 2, Ni)
+            id = mod1(Ni - i - 1, Ni)
+            e = contract_o3_V(ACu[i,j], ACd[id,j], FLu[i,j], FRu[i,j], FLu[ir,j], FRu[ir,j], FLo[irr,j], FRo[irr,j], A[i,j], A[ir,j], A[irr,j], O1, O2; forloop_iter)
+            n = contract_n3_V(ACu[i,j], ACd[id,j], FLu[i,j], FRu[i,j], FLu[ir,j], FRu[ir,j], FLo[irr,j], FRo[irr,j], A[i,j], A[ir,j], A[irr,j],; forloop_iter)
+            params.verbosity >= 4 && println("J3_Vertical_energy = $(J3*e/n)")
+            etol += J3 * e/n
+            e_dict["J3_Vertical_energy"]["$(i),$(j)"] = J3 * e/n
+        else
+            ir  = mod1(i + 1, Ni)
+            id = mod1(Ni - i, Ni)
+            jr = mod1(j + 1, Nj)
+            e = contract_o_D2(FLu[i,j], FLo[ir,j], ACu[i,j], ACd[id,j], FRu[i,jr], FRo[ir,jr], ARu[i,jr], ARd[id,jr], A[i,j], A[i,jr], A[ir,j], A[ir,jr], O1, O2; forloop_iter)
+            n = contract_n_D(FLu[i,j], FLo[ir,j], ACu[i,j], ACd[id,j], FRu[i,jr], FRo[ir,jr], ARu[i,jr], ARd[id,jr], A[i,j], A[i,jr], A[ir,j], A[ir,jr]; forloop_iter)
+            params.verbosity >= 4 && println("J2_Diagonal2_energy = $(J2*e/n)")
+            etol += J2 * e/n
+            e_dict["J2_Diagonal2_energy"]["$(i),$(j)"] = J2 * e/n
+        end
+
+    end
+
+    params.verbosity >= 4 && println("energy = $(etol/len)")
+    # Zygote.@ignore fδEierr[4] = abs(imag(etol/len))
+    return etol/len, e_dict
+end
+
 function expectation_value(model::SS, A, env, params::iPEPSOptimize)
     @unpack ACu, ARu, ACd, ARd, FLu, FRu, FLo, FRo = env
     @unpack J1, J2 = model
@@ -142,6 +225,69 @@ function expectation_value(model::SS, A, env, params::iPEPSOptimize)
     return etol/len
 end
 
+function expectation_value(model::Kagome, A, env, params::iPEPSOptimize)
+    @unpack ACu, ARu, ACd, ARd, FLu, FRu, FLo, FRo = env
+    @unpack J1, J2 = model
+    @unpack forloop_iter, ifcheckpoint, bondratio, order = params
+
+    Ni, Nj = size(A)
+    atype = _arraytype(A[1])
+    etol = 0
+    len = length(A)
+    e_dict = Dict{String, Dict{String, Any}}(
+        "onsite_energy"   => Dict{String, Any}(),
+        "Horizontal_energy" => Dict{String, Any}(),
+        "Vertical_energy"   => Dict{String, Any}(),
+        "Diagonal1_energy"  => Dict{String, Any}(),
+    )
+    for p in 1:len
+        i, j = Tuple(findfirst(==(p), A.pattern))
+        O1, O2 = Zygote.@ignore atype.(hamiltonian_trunc(model))
+        h = Zygote.@ignore atype(hamiltonian_onsite(model))
+
+        params.verbosity >= 4 && println("===========$i,$j===========")
+
+        ir = Ni + 1 - i
+        e = contract_o1(FLo[i,j],ACu[i,j],A[i,j],ACd[ir,j],FRo[i,j], h; forloop_iter)
+        n = contract_n1(FLo[i,j],ACu[i,j],A[i,j],ACd[ir,j],FRo[i,j]; forloop_iter)
+        params.verbosity >= 4 && println("Onsite energy = $(e/n)")
+        etol += J1 * e/n
+        e_dict["onsite_energy"]["$(i),$(j)"] = J1 * e/n
+
+        ir = Ni + 1 - i
+        jr = mod1(j + 1, Nj)
+        e = contract_o2_H(FLo[i,j], ACu[i,j], A[i,j], ACd[ir,j], FRo[i,jr], ARu[i,jr], A[i,jr], ARd[ir,jr], O1, O2; forloop_iter)
+        n = contract_n2_H(FLo[i,j], ACu[i,j], A[i,j], ACd[ir,j], FRo[i,jr], ARu[i,jr], A[i,jr], ARd[ir,jr]; forloop_iter)
+        params.verbosity >= 4 && println("Horizontal energy = $(e/n)")
+        etol += J1 * e/n
+        e_dict["Horizontal_energy"]["$(i),$(j)"] = J1 * e/n
+
+        ir  =  mod1(i + 1, Ni)
+        irr = mod1(Ni - i, Ni) 
+        e = contract_o2_V(ACu[i,j], FLu[i,j], A[i,j], FRu[i,j], FLo[ir,j], A[ir,j], FRo[ir,j], ACd[irr,j], O1, O2; forloop_iter)
+        n = contract_n2_V(ACu[i,j], FLu[i,j], A[i,j], FRu[i,j], FLo[ir,j], A[ir,j], FRo[ir,j], ACd[irr,j]; forloop_iter)
+        params.verbosity >= 4 && println("Vertical energy = $(e/n)")
+        etol += J1 * e/n
+        e_dict["Vertical_energy"]["$(i),$(j)"] = J1 * e/n
+
+        # if model.ifrotate
+        #     O1, O2 = Zygote.@ignore atype.(hamiltonian_trunc(J1J2(model.S,model.J1,model.J2,false)))
+        # end
+        ir  = mod1(i + 1, Ni)
+        irr = mod1(Ni - i, Ni)
+        jr = mod1(j + 1, Nj)
+        e = contract_o_D1(FLu[i,j], FLo[ir,j], ACu[i,j], ACd[irr,j], FRu[i,jr], FRo[ir,jr], ARu[i,jr], ARd[irr,jr], A[i,j], A[i,jr], A[ir,j], A[ir,jr], O1, O2; forloop_iter)
+        n = contract_n_D(FLu[i,j], FLo[ir,j], ACu[i,j], ACd[irr,j], FRu[i,jr], FRo[ir,jr], ARu[i,jr], ARd[irr,jr], A[i,j], A[i,jr], A[ir,j], A[ir,jr]; forloop_iter)
+        params.verbosity >= 4 && println("h2D1 = $(J1*e/n)")
+        etol += J1 * e/n
+        e_dict["Diagonal1_energy"]["$(i),$(j)"] = J1 * e/n
+    end
+
+    params.verbosity >= 4 && println("energy = $(etol/len)")
+    # Zygote.@ignore fδEierr[4] = abs(imag(etol/len))
+    return etol/len, e_dict
+end
+
 function magnetization_value(model, A, env, params)
     @unpack ACu, ARu, ACd, ARd, FLu, FRu, FLo, FRo = env
     atype = _arraytype(ACu[1])
@@ -173,6 +319,74 @@ function magnetization_value(model, A, env, params)
     end
 
     M_mean = sum(Mnorm)/len
+    params.verbosity >= 4 && println("|M|_mean = $(M_mean)")
+    return M_mean, m_dict
+end
+
+function magnetization_value(model::Kagome, A, env, params)
+    @unpack ACu, ARu, ACd, ARd, FLu, FRu, FLo, FRo = env
+    atype = _arraytype(ACu[1])
+    S = model.S
+    Sx = atype(const_Sx(S))
+    Sy = atype(const_Sy(S))
+    Sz = atype(const_Sz(S))
+    d = size(Sx,1)
+    Id = atype(Matrix{Float64}(I, d, d))
+
+    Sx1 = reshape((@tensor Sx1[1,2,3,4,5,6] := Sx[1,4] * Id[2,5] * Id[3,6]),d^3,d^3)
+    Sy1 = reshape((@tensor Sy1[1,2,3,4,5,6] := Sy[1,4] * Id[2,5] * Id[3,6]),d^3,d^3)
+    Sz1 = reshape((@tensor Sz1[1,2,3,4,5,6] := Sz[1,4] * Id[2,5] * Id[3,6]),d^3,d^3)
+
+    Sx2 = reshape((@tensor Sx2[1,2,3,4,5,6] := Id[1,4] * Sx[2,5] * Id[3,6]),d^3,d^3)
+    Sy2 = reshape((@tensor Sy2[1,2,3,4,5,6] := Id[1,4] * Sy[2,5] * Id[3,6]),d^3,d^3)
+    Sz2 = reshape((@tensor Sz2[1,2,3,4,5,6] := Id[1,4] * Sz[2,5] * Id[3,6]),d^3,d^3)
+
+    Sx3 = reshape((@tensor Sx3[1,2,3,4,5,6] := Id[1,4] * Id[2,5] * Sx[3,6]),d^3,d^3)
+    Sy3 = reshape((@tensor Sy3[1,2,3,4,5,6] := Id[1,4] * Id[2,5] * Sy[3,6]),d^3,d^3)
+    Sz3 = reshape((@tensor Sz3[1,2,3,4,5,6] := Id[1,4] * Id[2,5] * Sz[3,6]),d^3,d^3)
+
+    Ni, Nj = size(ACu)
+    len = length(ACu.data)
+    Ni,Nj = size(ACu)
+    forloop_iter = params.forloop_iter
+    m_dict = Dict{String, Any}()
+    Mnorm1 = zeros(ComplexF64, Ni, Nj)
+    Mnorm2 = zeros(ComplexF64, Ni, Nj)
+    Mnorm3 = zeros(ComplexF64, Ni, Nj)
+    for p in 1:len
+        i, j = Tuple(findfirst(==(p), ACu.pattern))
+        params.verbosity >= 4 && println("===========$i,$j===========")
+        ir = Ni + 1 - i
+        Mx1 = contract_o1(FLo[i,j],ACu[i,j],A[i,j],ACd[ir,j],FRo[i,j], Sx1; forloop_iter)
+        My1 = contract_o1(FLo[i,j],ACu[i,j],A[i,j],ACd[ir,j],FRo[i,j], Sy1; forloop_iter)
+        Mz1 = contract_o1(FLo[i,j],ACu[i,j],A[i,j],ACd[ir,j],FRo[i,j], Sz1; forloop_iter)
+        
+        Mx2 = contract_o1(FLo[i,j],ACu[i,j],A[i,j],ACd[ir,j],FRo[i,j], Sx2; forloop_iter)
+        My2 = contract_o1(FLo[i,j],ACu[i,j],A[i,j],ACd[ir,j],FRo[i,j], Sy2; forloop_iter)
+        Mz2 = contract_o1(FLo[i,j],ACu[i,j],A[i,j],ACd[ir,j],FRo[i,j], Sz2; forloop_iter)
+
+        Mx3 = contract_o1(FLo[i,j],ACu[i,j],A[i,j],ACd[ir,j],FRo[i,j], Sx3; forloop_iter)
+        My3 = contract_o1(FLo[i,j],ACu[i,j],A[i,j],ACd[ir,j],FRo[i,j], Sy3; forloop_iter)
+        Mz3 = contract_o1(FLo[i,j],ACu[i,j],A[i,j],ACd[ir,j],FRo[i,j], Sz3; forloop_iter)
+
+        n = contract_n1(FLo[i,j],ACu[i,j],A[i,j],ACd[ir,j],FRo[i,j]; forloop_iter)
+
+        Mag1 = [Mx1/n, My1/n, Mz1/n]
+        Mnorm1[i,j] = norm(Mag1)
+        params.verbosity >= 4 && println("M1 = $(Mag1)\n|M1| = $(Mnorm1)")
+        Mag2 = [Mx2/n, My2/n, Mz2/n]
+        Mnorm2[i,j] = norm(Mag2)
+        params.verbosity >= 4 && println("M2 = $(Mag2)\n|M2| = $(Mnorm2)")
+        Mag3 = [Mx3/n, My3/n, Mz3/n]
+        Mnorm3[i,j] = norm(Mag3)
+        params.verbosity >= 4 && println("M3 = $(Mag3)\n|M3| = $(Mnorm3)")
+
+        m_dict["$(i),$(j),1"] = Dict("Mx" => Mag1[1], "My" => Mag1[2], "Mz" => Mag1[3], "|M|" => Mnorm1[i,j])
+        m_dict["$(i),$(j),2"] = Dict("Mx" => Mag2[1], "My" => Mag2[2], "Mz" => Mag2[3], "|M|" => Mnorm2[i,j])
+        m_dict["$(i),$(j),3"] = Dict("Mx" => Mag3[1], "My" => Mag3[2], "Mz" => Mag3[3], "|M|" => Mnorm3[i,j])
+    end
+
+    M_mean = sum(Mnorm1 + Mnorm2 + Mnorm3)/(3*len)
     params.verbosity >= 4 && println("|M|_mean = $(M_mean)")
     return M_mean, m_dict
 end
