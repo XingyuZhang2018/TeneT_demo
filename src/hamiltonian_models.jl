@@ -10,6 +10,22 @@ function hamiltonian_trunc(model)
     return reshape(h1, d,d,truc), reshape(h2, truc,d,d)
 end
 
+function hamiltonian_trunc(model, direction)
+    if direcrion=='right'
+        h = hamiltonian_right(model)
+    elseif direcrion=='down'
+        h = hamiltonian_down(model)
+    else
+        error("Not implemented")
+    d = size(h, 1)
+    U, S, V = svd(reshape(h,d^2,d^2))
+    truc = sum(S .> 1e-10)
+    h1 = U[:,1:truc] * Diagonal(S[1:truc]) 
+    h2 = V[:,1:truc]'
+    return reshape(h1, d,d,truc), reshape(h2, truc,d,d)
+end
+
+
 function const_Sx(S::Real)
     dims = Int(2*S + 1)
     ms = [-S+i-1 for i in 1:dims]
