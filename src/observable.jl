@@ -242,7 +242,8 @@ function expectation_value(model::Kagome, A, env, params::iPEPSOptimize)
     )
     for p in 1:len
         i, j = Tuple(findfirst(==(p), A.pattern))
-        O1, O2 = Zygote.@ignore atype.(hamiltonian_trunc(model))
+        Oh1, Oh2 = Zygote.@ignore atype.(hamiltonian_trunc(model,'right'))
+        Ov1, Ov2 = Zygote.@ignore atype.(hamiltonian_trunc(model,'down'))
         h = Zygote.@ignore atype(hamiltonian_onsite(model))
 
         params.verbosity >= 4 && println("===========$i,$j===========")
@@ -256,7 +257,7 @@ function expectation_value(model::Kagome, A, env, params::iPEPSOptimize)
 
         ir = Ni + 1 - i
         jr = mod1(j + 1, Nj)
-        e = contract_o2_H(FLo[i,j], ACu[i,j], A[i,j], ACd[ir,j], FRo[i,jr], ARu[i,jr], A[i,jr], ARd[ir,jr], O1, O2; forloop_iter)
+        e = contract_o2_H(FLo[i,j], ACu[i,j], A[i,j], ACd[ir,j], FRo[i,jr], ARu[i,jr], A[i,jr], ARd[ir,jr], Oh1, Oh2; forloop_iter)
         n = contract_n2_H(FLo[i,j], ACu[i,j], A[i,j], ACd[ir,j], FRo[i,jr], ARu[i,jr], A[i,jr], ARd[ir,jr]; forloop_iter)
         params.verbosity >= 4 && println("Horizontal energy = $(e/n)")
         etol += J1 * e/n
@@ -264,7 +265,7 @@ function expectation_value(model::Kagome, A, env, params::iPEPSOptimize)
 
         ir  =  mod1(i + 1, Ni)
         irr = mod1(Ni - i, Ni) 
-        e = contract_o2_V(ACu[i,j], FLu[i,j], A[i,j], FRu[i,j], FLo[ir,j], A[ir,j], FRo[ir,j], ACd[irr,j], O1, O2; forloop_iter)
+        e = contract_o2_V(ACu[i,j], FLu[i,j], A[i,j], FRu[i,j], FLo[ir,j], A[ir,j], FRo[ir,j], ACd[irr,j], Ov1, Ov2; forloop_iter)
         n = contract_n2_V(ACu[i,j], FLu[i,j], A[i,j], FRu[i,j], FLo[ir,j], A[ir,j], FRo[ir,j], ACd[irr,j]; forloop_iter)
         params.verbosity >= 4 && println("Vertical energy = $(e/n)")
         etol += J1 * e/n
