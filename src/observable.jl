@@ -243,7 +243,7 @@ function expectation_value(model::Kagome, A, env, params::iPEPSOptimize)
     for p in 1:len
         i, j = Tuple(findfirst(==(p), A.pattern))
         Oh1, Oh2 = Zygote.@ignore atype.(hamiltonian_trunc(model,"right"))
-	Ov1, Ov2 = Zygote.@ignore atype.(hamiltonian_trunc(model,"down"))
+	    Ov1, Ov2 = Zygote.@ignore atype.(hamiltonian_trunc(model,"down"))
         h = Zygote.@ignore atype(hamiltonian_onsite(model))
 
         params.verbosity >= 4 && println("===========$i,$j===========")
