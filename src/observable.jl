@@ -237,8 +237,7 @@ function expectation_value(model::Kagome, A, env, params::iPEPSOptimize)
     e_dict = Dict{String, Dict{String, Any}}(
         "onsite_energy"   => Dict{String, Any}(),
         "Horizontal_energy" => Dict{String, Any}(),
-        "Vertical_energy"   => Dict{String, Any}(),
-        "Diagonal1_energy"  => Dict{String, Any}(),
+        "Vertical_energy"   => Dict{String, Any}()
     )
     for p in 1:len
         i, j = Tuple(findfirst(==(p), A.pattern))
