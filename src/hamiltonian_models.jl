@@ -179,11 +179,6 @@ function hamiltonian_onsite(model::Kagome)
         h = (@tensor out[1,2,3,4,5,6] := Sx[1,4] * Sx[2,5] * Id[3,6]) +
             (@tensor out[1,2,3,4,5,6] := Sy[1,4] * Sy[2,5] * Id[3,6]) +
             (@tensor out[1,2,3,4,5,6] := Sz[1,4] * Sz[2,5] * Id[3,6]) + 
-
-            (@tensor out[1,2,3,4,5,6] := Sx[1,4] * Id[2,5] * Sx[3,6]) +
-            (@tensor out[1,2,3,4,5,6] := Sy[1,4] * Id[2,5] * Sy[3,6]) +
-            (@tensor out[1,2,3,4,5,6] := Sz[1,4] * Id[2,5] * Sz[3,6]) +
-            
             (@tensor out[1,2,3,4,5,6] := Id[1,4] * Sx[2,5] * Sx[3,6]) +
             (@tensor out[1,2,3,4,5,6] := Id[1,4] * Sy[2,5] * Sy[3,6]) +
             (@tensor out[1,2,3,4,5,6] := Id[1,4] * Sz[2,5] * Sz[3,6])
