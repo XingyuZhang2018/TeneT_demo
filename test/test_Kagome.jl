@@ -7,10 +7,11 @@ using LinearAlgebra
 using TensorOperations
 # using Zygote
 
-seed = 72
+seed = 42
 Random.seed!(seed)
 atype = Array
-D, χ, χshift = 2, 9, 0
+etype = Float64
+D, χ, χshift = 2, 20, 0
 # pattern = [1 2;
 #            2 1]
 pattern = [1;;]
@@ -25,7 +26,7 @@ SUτ = 0.0
 # else
     # folder = joinpath(pkgdir(TeneT_demo), "data/$model/$pattern/seed$seed/general/")
 # end
-folder = joinpath(pkgdir(TeneT_demo), "data/$model/$pattern/seed$seed/bilayer_Z2/")
+folder = joinpath(pkgdir(TeneT_demo), "data/$model/$pattern/seed$seed/")
 boundary_alg = VUMPS(ifupdown=true,
                      ifdownfromup=false,
                      ifsimple_eig=true,
@@ -34,9 +35,9 @@ boundary_alg = VUMPS(ifupdown=true,
                      forloop_iter=1,
                      maxiter=30, 
                      miniter=1, 
-                     maxiter_ad=4,
-                     miniter_ad=4,
-                     power_iter=5,
+                     maxiter_ad=20,
+                     miniter_ad=20,
+                     power_iter=1,
                      power_iter_obs=40,
                      show_every=10,
                      tol=1e-10,
@@ -58,11 +59,11 @@ params = GradientOptimize(model=model,
                           reuse_env=true, 
                           ifflatten=false,
                           ifsave_env=true,
-                          ifload_env=true,
+                          ifload_env=false,
                           ifsave_lbfgs=true,
                           ifload_lbfgs=false
 )
-A = init_ipeps(;atype, No, d=8, pattern, D, χ, params)
+A = init_ipeps(;atype, etype, No, d=8, pattern, D, χ, params)
 # A = TeneT_demo.init_ipeps_to_D(;atype, No, D, D_new=3, params)
 
 function restriction_ipeps(A)

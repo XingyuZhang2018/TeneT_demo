@@ -183,9 +183,9 @@ function hamiltonian_onsite(model::Kagome)
             (@tensor out[1,2,3,4,5,6] := Id[1,4] * Sy[2,5] * Sy[3,6]) +
             (@tensor out[1,2,3,4,5,6] := Id[1,4] * Sz[2,5] * Sz[3,6])
 
-        return reshape(h,d^3,d^3)
+        return reshape(real(h),d^3,d^3)
     # end
-    return h
+    # return h
 end
 
 function hamiltonian_right(model::Kagome)
@@ -210,7 +210,7 @@ function hamiltonian_right(model::Kagome)
             (@tensor out[1,2,3,7,8,9,4,5,6,10,11,12] := Id[1,7] * Id[2,8] * Sy[3,9] * Id[4,10] * Sy[5,11] * Id[6,12]) + 
             (@tensor out[1,2,3,7,8,9,4,5,6,10,11,12] := Id[1,7] * Id[2,8] * Sz[3,9] * Id[4,10] * Sz[5,11] * Id[6,12])
 
-        return reshape(h,d^3,d^3,d^3,d^3)
+        return reshape(real(h),d^3,d^3,d^3,d^3)
     # end
     return h
 end
@@ -237,9 +237,9 @@ function hamiltonian_down(model::Kagome)
             (@tensor out[1,2,3,7,8,9,4,5,6,10,11,12] := Id[1,7] * Sy[2,8] * Id[3,9] * Sy[4,10] * Id[5,11] * Id[6,12]) +
             (@tensor out[1,2,3,7,8,9,4,5,6,10,11,12] := Id[1,7] * Sz[2,8] * Id[3,9] * Sz[4,10] * Id[5,11] * Id[6,12])
 
-        return reshape(h,d^3,d^3,d^3,d^3)
+        return reshape(real(h),d^3,d^3,d^3,d^3)
     # end
-    return h
+    # return h
 end
 
 @kwdef mutable struct J1J2J3 <: HamiltonianModel
