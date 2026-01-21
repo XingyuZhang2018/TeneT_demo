@@ -10,17 +10,19 @@ function hamiltonian_trunc(model)
     return reshape(h1, d,d,truc), reshape(h2, truc,d,d)
 end
 
+
 function hamiltonian_trunc(model, direction)
-    if direcrion=='right'
+    if direction=="right"
         h = hamiltonian_right(model)
-    elseif direcrion=='down'
+    elseif direction=="down"
         h = hamiltonian_down(model)
     else
         error("Not implemented")
+    end
     d = size(h, 1)
     U, S, V = svd(reshape(h,d^2,d^2))
     truc = sum(S .> 1e-10)
-    h1 = U[:,1:truc] * Diagonal(S[1:truc]) 
+    h1 = U[:,1:truc] * Diagonal(S[1:truc])
     h2 = V[:,1:truc]'
     return reshape(h1, d,d,truc), reshape(h2, truc,d,d)
 end
@@ -233,19 +235,17 @@ function hamiltonian_down(model::Kagome)
     #     h = @tensor out[i,j,k,l] := h[i,j,c,d] * (Sx*2)[k,c] * conj(Sx*2[l,d])
     #     return h
     # else
-        h = (@tensor out[1,2,3,7,8,9,4,5,6,10,11,12] := Id[1,7] * Id[2,8] * Sx[3,9] * Sx[4,10] * Id[5,11] * Id[6,12]) + 
-            (@tensor out[1,2,3,7,8,9,4,5,6,10,11,12] := Id[1,7] * Id[2,8] * Sy[3,9] * Sy[4,10] * Id[5,11] * Id[6,12]) + 
+        h = (@tensor out[1,2,3,7,8,9,4,5,6,10,11,12] := Id[1,7] * Id[2,8] * Sx[3,9] * Sx[4,10] * Id[5,11] * Id[6,12]) +
+            (@tensor out[1,2,3,7,8,9,4,5,6,10,11,12] := Id[1,7] * Id[2,8] * Sy[3,9] * Sy[4,10] * Id[5,11] * Id[6,12]) +
             (@tensor out[1,2,3,7,8,9,4,5,6,10,11,12] := Id[1,7] * Id[2,8] * Sz[3,9] * Sz[4,10] * Id[5,11] * Id[6,12]) +
-            (@tensor out[1,2,3,7,8,9,4,5,6,10,11,12] := Id[1,7] * Id[2,8] * Sx[2,8] * Sx[4,10] * Id[4,10] * Id[6,12]) + 
-            (@tensor out[1,2,3,7,8,9,4,5,6,10,11,12] := Id[1,7] * Id[2,8] * Sy[2,8] * Sy[4,10] * Id[4,10] * Id[6,12]) + 
-            (@tensor out[1,2,3,7,8,9,4,5,6,10,11,12] := Id[1,7] * Id[2,8] * Sz[2,8] * Sz[4,10] * Id[4,10] * Id[6,12])
+            (@tensor out[1,2,3,7,8,9,4,5,6,10,11,12] := Id[1,7] * Sx[2,8] * Id[3,9] * Sx[4,10] * Id[5,11] * Id[6,12]) +
+            (@tensor out[1,2,3,7,8,9,4,5,6,10,11,12] := Id[1,7] * Sy[2,8] * Id[3,9] * Sy[4,10] * Id[5,11] * Id[6,12]) +
+            (@tensor out[1,2,3,7,8,9,4,5,6,10,11,12] := Id[1,7] * Sz[2,8] * Id[3,9] * Sz[4,10] * Id[5,11] * Id[6,12])
 
         return reshape(h,d^3,d^3,d^3,d^3)
     # end
     return h
 end
-
-
 
 @kwdef mutable struct J1J2J3 <: HamiltonianModel
     S::Real = 1/2
@@ -273,3 +273,4 @@ function hamiltonian(model::J1J2J3)
         return real(h)
     end
 end
+
