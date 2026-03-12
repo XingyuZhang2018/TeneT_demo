@@ -31,6 +31,7 @@ export Heisenberg, J1J2, SS, Kagome, J1J2J3
 export hamiltonian
 export observable
 export SUOptimize, FUOptimize, GradientOptimize, init_ipeps, optimise_ipeps, energy
+export read_last_log
 abstract type iPEPSOptimize end
 
 include("defaults.jl")

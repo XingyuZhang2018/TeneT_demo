@@ -97,7 +97,7 @@ function hamiltonian(model::Heisenberg)
         # h = ein"ijcd,kc,ld -> ijkl"(h,Sx*2,(Sx*2)')
         h = @tensor out[i,j,k,l] := h[i,j,c,d] * (Sx*2)[k,c] * conj((Sx*2)[l,d])
     end
-    return h
+    return real(h)
 end
 
 @kwdef mutable struct J1J2 <: HamiltonianModel
@@ -121,7 +121,7 @@ function hamiltonian(model::J1J2)
             (@tensor out[i,j,k,l] := Sz[i,j] * Sz[k,l])
         # h = ein"ijcd,kc,ld -> ijkl"(h,Sx*2,(Sx*2)')
         h = @tensor out[i,j,k,l] := h[i,j,c,d] * (Sx*2)[k,c] * conj(Sx*2[l,d])
-        return h
+        return real(h)
     else
         # h = ein"ij,kl -> ijkl"(Sx, Sx) +
         #     ein"ij,kl -> ijkl"(Sy, Sy) +
@@ -129,7 +129,7 @@ function hamiltonian(model::J1J2)
         h = (@tensor out[i,j,k,l] := Sx[i,j] * Sx[k,l]) +
             (@tensor out[i,j,k,l] := Sy[i,j] * Sy[k,l]) +
             (@tensor out[i,j,k,l] := Sz[i,j] * Sz[k,l])
-        return h
+        return real(h)
     end
 end
 
