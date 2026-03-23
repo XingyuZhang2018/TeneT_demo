@@ -131,7 +131,7 @@ function find_local_min_norm_G(A, params)
         A′ = guage_transfer(A_cpu, G, params)
         return norm(A′)
     end
-    function f2(G) 
+    function f2(G)
         A′ = guage_transfer(A_cpu, G, params)
         @tensor Ml[1,6] := A′[1,2,3,4,5,7] * conj(A′[6,2,3,4,5,7])
         @tensor Mr[6,3] := A′[1,2,3,4,5,7] * conj(A′[1,2,6,4,5,7])
@@ -165,8 +165,12 @@ function find_local_min_norm_G(A, params)
     return atype.(G)
 end
 
-function local_min_norm(A, params)
-    G = Zygote.@ignore find_local_min_norm_G(A, params)
+function local_min_norm(A, params; ifignore_gauge=true)
+    if ifignore_gauge
+        G = Zygote.@ignore find_local_min_norm_G(A, params)
+    else
+        G = find_local_min_norm_G(A, params)
+    end
     AG = guage_transfer(A, G, params)
 
     return AG

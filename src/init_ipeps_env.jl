@@ -29,16 +29,29 @@ function init_ipeps(;atype = Array, etype=ComplexF64, No, pattern, χ::Int, D::I
     return atype(A)
 end
 
-function init_ipeps_to_D(;atype = Array, No, D::Int, D_new::Int, params::iPEPSOptimize)
-    file = "$(params.folder)/D$(D)/ipeps/ipeps_No.$(No).jld2"
+function init_ipeps_to_D(;atype = Array, No, D::Int, D_new::Int, χ::Int, params::iPEPSOptimize)
+    file = joinpath("$(params.folder)", "D$(D)", "ipeps", "χ$(χ)", "No.$(No).jld2")
     A = load(file, "bcipeps")
     D, d = size(A)[[1,5]]
     params.verbosity >= 2 && @info "load ipeps from $file"
     A = build_A(A, params)
     A = SU_parameterization(A, params; D_new)
-    A_new = rand(ComplexF64, D_new,D_new,D_new,D_new,d, length(unique(params.pattern)))
+    A_new = rand(eltype(A), D_new,D_new,D_new,D_new,d, length(unique(params.pattern)))
     for i in 1:length(unique(params.pattern))
         A_new[:,:,:,:,:,i] = A[i][1:D_new,1:D_new,1:D_new,1:D_new,:]
+    end
+    params.verbosity >= 2 && @info "truncated size of A: $(size(A_new))"
+    return atype(A_new)
+end
+
+function init_ipeps_perturbation(;atype = Array, No, D::Int, D_new::Int, χ::Int, ϵ=1e-1, params::iPEPSOptimize)
+    file = joinpath("$(params.folder)", "D$(D)", "ipeps", "χ$(χ)", "No.$(No).jld2")
+    A = load(file, "bcipeps")
+    D, d = size(A)[[1,5]]
+    params.verbosity >= 2 && @info "load ipeps from $file"
+    A_new = (rand(eltype(A), D_new,D_new,D_new,D_new,d, length(unique(params.pattern))) .- 0.5) * norm(A) * ϵ
+    for i in 1:length(unique(params.pattern))
+        A_new[1:D,1:D,1:D,1:D,:,i] = A[:,:,:,:,:,i]
     end
     params.verbosity >= 2 && @info "truncated size of A: $(size(A_new))"
     return atype(A_new)

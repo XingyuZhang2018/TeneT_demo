@@ -6,16 +6,16 @@ using OptimKit
 using LinearAlgebra
 using Zygote
 
-seed = 88
+seed = 44
 Random.seed!(seed)
-atype = CuArray
-etype = ComplexF64
-D, χ, χshifit = 3, 60, 0
+atype = Array
+etype = Float64
+D, χ, χshifit = 2, 16, 0
 pattern = [1 3;
            2 4]
 # pattern = [1;;]
-model = J1J2J3(J1=1.0, J2=1.0, J3=0.5, ifrotate=false)
-No = 0
+model = J1J2J3(J1=1.6, J2=1.0, J3=0.5, ifrotate=false)
+No = 97
 SUτ = 0.0
 folder = joinpath(pkgdir(TeneT_demo), "data/$model/$pattern/seed$seed/")
 boundary_alg = VUMPS(ifupdown=true,
@@ -26,9 +26,9 @@ boundary_alg = VUMPS(ifupdown=true,
                      forloop_iter=1,
                      maxiter=30, 
                      miniter=1, 
-                     maxiter_ad=10,
-                     miniter_ad=10,
-                     power_iter=1,
+                     maxiter_ad=4,
+                     miniter_ad=4,
+                     power_iter=5,
                      power_iter_obs=40,
                      show_every=10,
                      tol=1e-10,
@@ -56,10 +56,11 @@ params = GradientOptimize(model=model,
                           order=:none,
                           bondratio=1.0
 )
-A = init_ipeps(;atype, etype, No, d=2, pattern, D, χ, params)
+# A = init_ipeps(;atype, etype, No, d=2, pattern, D, χ, params)
 # A = TeneT_demo.init_ipeps_to_D(;atype, No, D, D_new=3, params)
+A = TeneT_demo.init_ipeps_perturbation(;atype, No, D, D_new=3, χ, params)
 
-function _restriction_ipeps(A)
+function restriction_ipeps(A)
     # Ar = Zygote.Buffer(A)
     # Ar[:,:,:,:,:,1] = A[:,:,:,:,:,1]
     # Ar[:,:,:,:,:,1] += permutedims(Ar[:,:,:,:,:,1],(4,3,2,1,5))
@@ -77,15 +78,11 @@ function _restriction_ipeps(A)
     # Ar = copy(Ar)
     # return Ar/norm(Ar)
     # return A/norm(A)
-    # A /= norm(A)
+    A /= norm(A)
     A = TeneT_demo.local_min_norm(A, params)
 end
 
-optimise_ipeps(A, 60, χshifit, params;
-               restriction_ipeps = _restriction_ipeps
-);
+optimise_ipeps(A, 32, χshifit, params; restriction_ipeps);
 
-# observable(A, 20, params;
-# #            restriction_ipeps = _restriction_ipeps
-# );
+# observable(A, χ, params; restriction_ipeps);
 # println(1)

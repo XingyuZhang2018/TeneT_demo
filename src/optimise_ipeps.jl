@@ -8,6 +8,7 @@
     SUτ::Real = 0.0
     ifSU::Bool = false
     optimizer = LBFGS(; verbosity = 0)
+    maxiter_restart::Int = 100
     folder::String = joinpath(pwd(), "data", "ipeps")
     show_every::Int = 1
     save_every::Int = 1
@@ -42,7 +43,18 @@ function energy(A, rt, rt′, fδEierr, params::iPEPSOptimize)
 
     Zygote.@ignore begin
         update!(rt′, rt)
-        fδEierr[4] = abs(imag(e))
+        if eltype(e) <: Complex
+            fδEierr[4] = abs(imag(e))
+        else
+            iSy = _arraytype(A[1])(real(1im * const_Sy(params.model.S)))
+            i,j = 1,1
+            Ni = size(A, 1)
+            id = Ni + 1 - i
+            @unpack FLo, ACu, ACd, FRo = env
+            My = contract_o1(FLo[i,j],ACu[i,j],A[i,j],ACd[id,j],FRo[i,j], iSy; forloop_iter=params.boundary_alg.forloop_iter)
+            n  = contract_n1(FLo[i,j],ACu[i,j],A[i,j],ACd[id,j],FRo[i,j]; forloop_iter=params.boundary_alg.forloop_iter)
+            fδEierr[4] = abs(My/n)
+        end
     end
 
     return e
@@ -90,7 +102,7 @@ function optimise_ipeps(A, χ::Int, χshift::Int, params::iPEPSOptimize;
     state_path = joinpath(params.folder, "D$(D)", "lbfgs_checkpoint")
     # _precondition(x, g) = precondition_invese_hessian(x, g, rt, rt′, params, restriction_ipeps, fδEierr , params.iter_precond)
     # local x, f, g, numfg, normgradhistory
-    for _ in 1:100
+    for _ in 1:params.maxiter_restart
         A, e, eg, fgnum, history = optimize_reload(fg, A, alg; 
                                   resume_from = params.ifload_lbfgs ? joinpath(state_path, "χ$χ.jld2") : nothing,
                                   save_state_to = params.ifsave_lbfgs ? joinpath(state_path, "χ$χ.jld2") : nothing,
